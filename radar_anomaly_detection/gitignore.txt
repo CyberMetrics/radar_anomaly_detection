@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+
+# Data and Models (optional: commit if small, or upload to GitHub Releases)
+*.keras
+*.joblib
+anomaly_threshold.txt
+KDD*.txt  # Datasets are large; host them elsewhere if needed
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
