@@ -235,12 +235,13 @@ if __name__ == '__main__':
     detection_thread = threading.Thread(target=continuous_detection_worker, daemon=True)
     detection_thread.start()
     
-    # Start Flask server
+    # Start Flask server with Render-compatible port
+    port = int(os.environ.get("PORT", 5000))  # Use Render's PORT env var or default to 5000
     print("\n" + "="*60)
     print("🚀 RADAR Anomaly Detection System Starting...")
     print("="*60)
-    print("📊 Dashboard: http://localhost:5000")
-    print("🔌 API Endpoint: http://localhost:5000/api/anomalies")
+    print(f"📊 Dashboard: {os.environ.get('RENDER_EXTERNAL_URL', 'http://localhost:5000')}")
+    print(f"🔌 API Endpoint: {os.environ.get('RENDER_EXTERNAL_URL', 'http://localhost:5000')}/api/anomalies")
     print("="*60 + "\n")
     
-    app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)
+    app.run(host='0.0.0.0', port=port, threaded=True)
