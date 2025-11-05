@@ -9,38 +9,76 @@ import threading
 import time
 from datetime import datetime
 import warnings
-import uuid # Imported uuid for unique IDs
-import os   # Imported os for environment variable checks
+import uuid 
+import os   
+import json 
 
 warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
-CORS(app) # Enable CORS for cross-origin requests
+CORS(app) 
 
 # Global variables to store real-time data
 anomaly_buffer = []
 buffer_lock = threading.Lock()
 MAX_BUFFER_SIZE = 100
 
-# === LOAD PRODUCTION ASSETS ===
+# Global variables for loaded assets (initialized below)
+MODEL, SCALER, THRESHOLD = None, None, None
+NORMAL_POOLS, ATTACK_POOLS = None, None
+MASTER_COLUMNS = []
+RUN_REAL_DETECTION = False
+
+# === DEMO MODE FALLBACK FUNCTION ===
+def generate_dummy_event():
+    """Generates simple, predictable dummy data for dashboard testing."""
+    value = random.uniform(0.1, 100.0)
+    is_anomaly = value > 80
+    
+    if is_anomaly:
+        severity = "High" if value > 95 else "Medium"
+        reason = f"Simulated spike at {value:.2f}"
+    else:
+        severity = "Low" if value > 50 else "Medium"
+        reason = "Normal simulation activity"
+
+    timestamp_iso = datetime.now().isoformat() + "Z"
+
+    return {
+        'id': str(uuid.uuid4())[:8],
+        'timestamp': timestamp_iso, 
+        'value': float(value), 
+        'anomaly_score': float(value / 100.0), 
+        'is_anomaly': bool(is_anomaly),
+        'true_label': "Simulated",
+        'prediction': "Attack" if is_anomaly else "Normal",
+        'severity': severity,
+        'status': 'New' if is_anomaly else 'Closed',
+        'reason': reason,
+        'asset_id': f"DEMO_{random.randint(10, 99)}",
+        'raw_data': json.dumps({"source": "DEMO_FEED", "value": value})
+    }
+
+# === LOAD PRODUCTION ASSETS (Now used for global initialization) ===
 def load_production_assets():
     """Load trained model, scaler, and threshold"""
+    global MODEL, SCALER, THRESHOLD
     try:
-        # NOTE: Model loading must happen outside the request/thread loop if possible, or only once
-        model = tf.keras.models.load_model('champion_autoencoder_model.keras')
-        scaler = joblib.load('nsl_kdd_scaler.joblib')
+        MODEL = tf.keras.models.load_model('champion_autoencoder_model.keras')
+        SCALER = joblib.load('nsl_kdd_scaler.joblib')
         with open('anomaly_threshold.txt', 'r') as f:
-            threshold = float(f.read())
+            THRESHOLD = float(f.read())
         print("✅ Production assets loaded successfully")
-        return model, scaler, threshold
+        return True
     except Exception as e:
-        print(f"❌ Error loading assets: {e}")
-        # Note: If assets fail, the worker will halt, preventing further issues.
-        return None, None, None
+        print(f"❌ Error loading assets (Running in DEMO MODE): {e}")
+        MODEL, SCALER, THRESHOLD = None, None, None
+        return False
 
-# === GET MASTER COLUMNS ===
+# === GET MASTER COLUMNS (Now used for global initialization) ===
 def get_master_columns():
     """Build master column list from training data"""
+    global MASTER_COLUMNS
     col_names_full = [
         'duration', 'protocol_type', 'service', 'flag', 'src_bytes', 'dst_bytes',
         'land', 'wrong_fragment', 'urgent', 'hot', 'num_failed_logins', 'logged_in',
@@ -55,21 +93,22 @@ def get_master_columns():
         'dst_host_srv_rerror_rate', 'label', 'difficulty'
     ]
     
-    # Assuming KDDTrain+.txt is available in the deployment environment
-    # Note: Use minimal data access during initialization for speed
     try:
         df_train = pd.read_csv('KDDTrain+.txt', header=None, names=col_names_full, nrows=100) 
         df_train = df_train.drop(['label', 'difficulty'], axis=1)
         categorical_cols = ['protocol_type', 'service', 'flag']
         df_train_encoded = pd.get_dummies(df_train, columns=categorical_cols, dtype=int)
-        return df_train_encoded.columns
+        MASTER_COLUMNS = df_train_encoded.columns
+        return True
     except FileNotFoundError:
         print("❌ KDDTrain+.txt not found. Cannot determine master columns.")
-        return []
+        MASTER_COLUMNS = []
+        return False
 
-# === LOAD DATA POOLS ===
-def load_data_pools(master_columns, scaler):
-    """Load normal and attack data pools"""
+# === LOAD DATA POOLS (Now used for global initialization) ===
+def load_data_pools():
+    """Load normal and attack data pools using global scaler"""
+    global NORMAL_POOLS, ATTACK_POOLS
     col_names_full = [
         'duration', 'protocol_type', 'service', 'flag', 'src_bytes', 'dst_bytes',
         'land', 'wrong_fragment', 'urgent', 'hot', 'num_failed_logins', 'logged_in',
@@ -84,49 +123,43 @@ def load_data_pools(master_columns, scaler):
         'dst_host_srv_rerror_rate', 'label', 'difficulty'
     ]
     
-    # Load and process data (using KDDTest+.txt as the stream source)
     try:
         df_train = pd.read_csv('KDDTrain+.txt', header=None, names=col_names_full)
         df_test = pd.read_csv('KDDTest+.txt', header=None, names=col_names_full)
     except FileNotFoundError:
         print("❌ KDDTrain+.txt or KDDTest+.txt not found. Cannot load data pools.")
-        return (np.array([]), pd.DataFrame()), (np.array([]), pd.DataFrame())
+        NORMAL_POOLS, ATTACK_POOLS = (np.array([]), pd.DataFrame()), (np.array([]), pd.DataFrame())
+        return False
 
     df_full = pd.concat([df_train, df_test], ignore_index=True)
-    
     df_full['true_label'] = np.where(df_full['label'] == 'normal', 'Normal', 'Attack')
     df_full = df_full.drop(['label', 'difficulty'], axis=1)
-    
     categorical_cols = ['protocol_type', 'service', 'flag']
-    df_encoded = pd.get_dummies(df_full.drop('true_label', axis=1), 
-                                 columns=categorical_cols, dtype=int)
+    df_encoded = pd.get_dummies(df_full.drop('true_label', axis=1), columns=categorical_cols, dtype=int)
     
-    # Reindex and scale only existing columns in master_columns
-    df_reindexed = df_encoded.reindex(columns=master_columns, fill_value=0)
-    
-    # Match rows with original labels for display
+    df_reindexed = df_encoded.reindex(columns=MASTER_COLUMNS, fill_value=0)
     normal_rows = df_full[df_full['true_label'] == 'Normal']
     attack_rows = df_full[df_full['true_label'] == 'Attack']
     
-    # Scale the encoded data using the indices of the normal/attack rows
-    normal_logs_scaled = scaler.transform(df_reindexed.loc[normal_rows.index])
-    attack_logs_scaled = scaler.transform(df_reindexed.loc[attack_rows.index])
+    normal_logs_scaled = SCALER.transform(df_reindexed.loc[normal_rows.index])
+    attack_logs_scaled = SCALER.transform(df_reindexed.loc[attack_rows.index])
     
+    NORMAL_POOLS = (normal_logs_scaled, normal_rows)
+    ATTACK_POOLS = (attack_logs_scaled, attack_rows)
     print(f"✅ Data pools created. Normal: {len(normal_logs_scaled)}, Attack: {len(attack_logs_scaled)}")
-    
-    return (normal_logs_scaled, normal_rows), (attack_logs_scaled, attack_rows)
+    return True
 
-# === PREDICTION FUNCTIONS ===
-def get_new_log_row(normal_pools, attack_pools, anomaly_chance=0.20):
-    """Sample a random log from pools"""
-    if random.random() < anomaly_chance and len(attack_pools[0]) > 0:
-        pool_scaled, pool_display = attack_pools
+# === PREDICTION FUNCTIONS (Uses global variables) ===
+def get_new_log_row(anomaly_chance=0.20):
+    """Sample a random log from pools, using global pools"""
+    if random.random() < anomaly_chance and len(ATTACK_POOLS[0]) > 0:
+        pool_scaled, pool_display = ATTACK_POOLS
         true_label = "Attack"
     else:
-        pool_scaled, pool_display = normal_pools
+        pool_scaled, pool_display = NORMAL_POOLS
         true_label = "Normal"
     
-    if len(pool_scaled) == 0: # Safety check
+    if len(pool_scaled) == 0: 
         return None, None, "Error"
         
     idx = random.randint(0, len(pool_scaled) - 1)
@@ -135,13 +168,12 @@ def get_new_log_row(normal_pools, attack_pools, anomaly_chance=0.20):
     
     return log_scaled, log_display, true_label
 
-def get_severity(score, threshold):
-    """Calculate severity based on score"""
-    if score < threshold:
+def get_severity(score):
+    """Calculate severity based on score, using global threshold"""
+    if score < THRESHOLD:
         return "Low", "Normal"
     
-    # Severity is based on how far the score is past the threshold
-    severity_factor = score / threshold
+    severity_factor = score / THRESHOLD
     if severity_factor > 5:
         return "High", "CRITICAL"
     elif severity_factor > 2:
@@ -149,34 +181,33 @@ def get_severity(score, threshold):
     else:
         return "Low", "Medium"
 
-def predict_log(log_scaled, log_display, true_label, model, threshold):
-    """Run prediction on a single log and format for frontend"""
+def predict_log(log_scaled, log_display, true_label):
+    """Run prediction on a single log and format for frontend, using global model"""
     log_scaled = np.array([log_scaled])
-    reconstruction = model.predict(log_scaled, verbose=0)
+    # The Keras predict call must happen inside the thread
+    reconstruction = MODEL.predict(log_scaled, verbose=0)
     mse = np.mean(np.power(log_scaled - reconstruction, 2), axis=1)[0]
     
-    is_anomaly = (mse > threshold)
+    is_anomaly = (mse > THRESHOLD)
     prediction = "Attack" if is_anomaly else "Normal"
-    severity, priority = get_severity(mse, threshold)
+    severity, priority = get_severity(mse)
     
-    # Generate reason based on score
     if is_anomaly:
-        if mse > threshold * 5:
+        if mse > THRESHOLD * 5:
             reason = "Critical anomaly detected - Immediate investigation required"
-        elif mse > threshold * 2:
+        elif mse > THRESHOLD * 2:
             reason = "Suspicious activity pattern detected"
         else:
             reason = "Moderate deviation from normal behavior"
     else:
         reason = "Normal behavior pattern"
     
-    # --- FIX APPLIED HERE: USE ISO FORMAT FOR JAVASCRIPT ---
     timestamp_iso = datetime.now().isoformat() + "Z"
 
     return {
-        'id': str(uuid.uuid4())[:8], # Use UUID for robust unique ID
-        'timestamp': timestamp_iso, # FIXED: ISO 8601 format
-        'value': float(mse * 100),  # Scaled value for the chart line (e.g. 0-100)
+        'id': str(uuid.uuid4())[:8], 
+        'timestamp': timestamp_iso, 
+        'value': float(mse * 100),  
         'anomaly_score': float(mse),
         'is_anomaly': bool(is_anomaly),
         'true_label': true_label,
@@ -185,36 +216,29 @@ def predict_log(log_scaled, log_display, true_label, model, threshold):
         'status': 'New' if is_anomaly else 'Closed',
         'reason': reason,
         'asset_id': f"{log_display['protocol_type']}-{log_display['service'][:10]}",
-        # Ensure raw_data is a valid JSON string 
         'raw_data': json.dumps({"protocol": log_display["protocol_type"], "service": log_display["service"], "score": mse})
     }
 
 # === BACKGROUND THREAD FOR CONTINUOUS DETECTION ===
 def continuous_detection_worker():
-    """Background thread that continuously generates predictions"""
-    global anomaly_buffer
+    """Background thread that continuously generates predictions or demo data."""
+    global anomaly_buffer, RUN_REAL_DETECTION
     
-    model, scaler, threshold = load_production_assets()
-    if model is None:
-        print("❌ Cannot start detection - halting worker.")
-        return
-    
-    master_columns = get_master_columns()
-    normal_pools, attack_pools = load_data_pools(master_columns, scaler)
-    
-    print("🚀 Starting continuous anomaly detection...")
+    print(f"Worker thread starting. Real Detection Mode: {RUN_REAL_DETECTION}")
     
     while True:
         try:
-            log_scaled, log_display, true_label = get_new_log_row(
-                normal_pools, attack_pools, anomaly_chance=0.20
-            )
+            if RUN_REAL_DETECTION:
+                # Use real detection logic
+                log_scaled, log_display, true_label = get_new_log_row(anomaly_chance=0.20)
+                if log_scaled is None:
+                    time.sleep(1)
+                    continue
+                result = predict_log(log_scaled, log_display, true_label)
             
-            if log_scaled is None: # Handle empty pools if data files are missing
-                 time.sleep(5)
-                 continue
-                 
-            result = predict_log(log_scaled, log_display, true_label, model, threshold)
+            else:
+                # Use DEMO MODE
+                result = generate_dummy_event()
             
             # Add to buffer
             with buffer_lock:
@@ -222,13 +246,15 @@ def continuous_detection_worker():
                 if len(anomaly_buffer) > MAX_BUFFER_SIZE:
                     anomaly_buffer.pop(0)
             
-            time.sleep(1) # Generate one prediction per second
+            time.sleep(1) 
             
         except Exception as e:
+            # If an error happens inside the thread, log it and keep the thread alive 
+            # (it will revert to DEMO mode if the real assets were the cause)
             print(f"Error in detection worker: {e}")
             time.sleep(5)
 
-# === FLASK ROUTES ===
+# === FLASK ROUTES (Unchanged) ===
 @app.route('/')
 def index():
     """Serve the dashboard HTML"""
@@ -245,31 +271,31 @@ def get_anomalies():
     max_score = max([d['anomaly_score'] for d in data], default=0.0)
     
     return jsonify({
-        'anomalies': data, # Key must be 'anomalies'
-        'metrics': {        # Key must be 'metrics'
+        'anomalies': data, 
+        'metrics': {        
             'total_anomalies': total_anomalies,
             'max_score': round(max_score, 4),
             'total_events': len(data)
         }
     })
 
-# === INITIALIZATION ===
-# Start background detection thread on app load (outside main thread execution)
+# === GLOBAL INITIALIZATION BLOCK (Runs once when Gunicorn starts) ===
+# 1. Load ML assets
+if load_production_assets():
+    # 2. If successful, load master columns
+    if get_master_columns():
+        # 3. If master columns successful, load data pools
+        if load_data_pools():
+            RUN_REAL_DETECTION = True
+            print("🟢 Starting Real Detection Thread.")
+        else:
+             print("🟡 Starting Demo Thread (Data Pools Missing).")
+    else:
+        print("🟡 Starting Demo Thread (Master Columns Missing).")
+else:
+    print("🟡 Starting Demo Thread (ML Assets Missing).")
+
+
+# 4. Start the background detection thread
 detection_thread = threading.Thread(target=continuous_detection_worker, daemon=True)
 detection_thread.start()
-
-# Note on Gunicorn/Render: Gunicorn (used by Render) will call the 'app' object directly, 
-# so the if __name__ == '__main__': block below is only for local testing.
-
-# if __name__ == '__main__':
-#     port = int(os.environ.get("PORT", 5000))
-#     print("\n" + "="*60)
-#     print("🚀 RADAR Anomaly Detection System Starting...")
-#     print("="*60)
-#     # Note: RENDER_EXTERNAL_URL is available in production on Render
-#     base_url = os.environ.get('RENDER_EXTERNAL_URL', f'http://localhost:{port}')
-#     print(f"📊 Dashboard: {base_url}")
-#     print(f"🔌 API Endpoint: {base_url}/api/anomalies")
-#     print("="*60 + "\n")
-    
-#     app.run(host='0.0.0.0', port=port, threaded=True)
