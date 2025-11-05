@@ -350,251 +350,268 @@
         </div>
     </div>
 
-    <script>
-        // Configuration
-        const API_URL = '/api/anomalies';
-        const REFRESH_INTERVAL = 2000; // 2 seconds
-        const MAX_CHART_POINTS = 50;
+   <script>
+    // Configuration
+    const API_URL = '/api/anomalies';
+    const REFRESH_INTERVAL = 2000; // 2 seconds
+    const MAX_CHART_POINTS = 50;
 
-        let currentFilter = 'All';
-        let chartInstance = null;
-        let allData = [];
+    let currentFilter = 'All';
+    let chartInstance = null;
+    let allData = []; // This will store the full array of anomalies/events
 
-        // Initialize Chart
-        function initChart() {
-            const ctx = document.getElementById('anomalyChart').getContext('2d');
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        {
-                            label: 'Anomaly Score',
-                            data: [],
-                            borderColor: '#667eea',
-                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 4,
-                            pointHoverRadius: 6
-                        },
-                        {
-                            label: 'Detected Anomalies',
-                            data: [],
-                            borderColor: '#f5576c',
-                            backgroundColor: '#f5576c',
-                            type: 'scatter',
-                            pointRadius: 8,
-                            pointHoverRadius: 10
-                        }
-                    ]
+    // Initialize Chart
+    function initChart() {
+        // Hide the loading indicator once the chart is ready to draw
+        document.getElementById('loadingIndicator').style.display = 'none';
+
+        const ctx = document.getElementById('anomalyChart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Anomaly Score',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: 'Detected Anomalies',
+                        data: [],
+                        borderColor: '#f5576c',
+                        backgroundColor: '#f5576c',
+                        type: 'scatter',
+                        pointRadius: 8,
+                        pointHoverRadius: 10
+                    }
+                ]
+            },
+            options: {
+                // ... (Chart.js options are correct and remain unchanged)
+                responsive: true,
+                maintainAspectRatio: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false
-                    },
-                    scales: {
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Time',
-                                font: { size: 14, weight: 'bold' }
-                            },
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 45
-                            }
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time',
+                            font: { size: 14, weight: 'bold' }
                         },
-                        y: {
-                            title: {
-                                display: true,
-                                text: 'Score',
-                                font: { size: 14, weight: 'bold' }
-                            },
-                            beginAtZero: true
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
                         }
                     },
-                    plugins: {
-                        legend: {
+                    y: {
+                        title: {
                             display: true,
-                            position: 'top'
+                            text: 'Score',
+                            font: { size: 14, weight: 'bold' }
+                        },
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    zoom: {
+                        pan: {
+                            enabled: true,
+                            mode: 'x'
                         },
                         zoom: {
-                            pan: {
-                                enabled: true,
-                                mode: 'x'
-                            },
-                            zoom: {
-                                wheel: {
-                                    enabled: true
-                                },
-                                pinch: {
-                                    enabled: true
-                                },
-                                mode: 'x'
-                            }
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'x'
                         }
                     }
                 }
-            });
-        }
-
-        // Update Chart with new data
-        function updateChart(data) {
-            if (!chartInstance) return;
-
-            const recentData = data.slice(-MAX_CHART_POINTS);
-            const labels = recentData.map(d => new Date(d.timestamp).toLocaleTimeString());
-            const scores = recentData.map(d => d.value);
-            const anomalyPoints = recentData
-                .filter(d => d.is_anomaly)
-                .map(d => ({
-                    x: new Date(d.timestamp).toLocaleTimeString(),
-                    y: d.value
-                }));
-
-            chartInstance.data.labels = labels;
-            chartInstance.data.datasets[0].data = scores;
-            chartInstance.data.datasets[1].data = anomalyPoints;
-            chartInstance.update('none');
-        }
-
-        // Render Anomaly List
-        function renderAnomalyList(data) {
-            const anomalyList = document.getElementById('anomalyList');
-            document.getElementById('loadingIndicator').style.display = 'none';
-            
-            let filteredData = data.filter(d => d.is_anomaly);
-            
-            if (currentFilter !== 'All') {
-                filteredData = filteredData.filter(d => d.severity === currentFilter);
             }
-
-            // Sort by timestamp (newest first)
-            filteredData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            
-            // Take only the last 20
-            const displayData = filteredData.slice(0, 20);
-
-            anomalyList.innerHTML = '';
-            
-            if (displayData.length === 0) {
-                anomalyList.innerHTML = '<li style="background: #f0f0f0; border-left-color: #999;">No anomalies detected matching current filter.</li>';
-                return;
-            }
-
-            displayData.forEach(anomaly => {
-                const listItem = document.createElement('li');
-                listItem.onclick = () => showAnomalyDetails(anomaly);
-                
-                const severityClass = `severity-${anomaly.severity.toLowerCase()}`;
-                const time = new Date(anomaly.timestamp).toLocaleTimeString();
-                
-                listItem.innerHTML = `
-                    <div class="anomaly-header">
-                        <span class="anomaly-id">ID: ${anomaly.id}</span>
-                        <span class="severity-badge ${severityClass}">${anomaly.severity}</span>
-                    </div>
-                    <div><strong>Time:</strong> ${time}</div>
-                    <div><strong>Score:</strong> ${anomaly.anomaly_score.toFixed(4)}</div>
-                    <div><strong>Asset:</strong> ${anomaly.asset_id}</div>
-                    <div style="margin-top: 5px; color: #666;">${anomaly.reason}</div>
-                `;
-                
-                anomalyList.appendChild(listItem);
-            });
-        }
-
-        // Update Metrics
-        function updateMetrics(data, metrics) {
-            document.getElementById('totalAnomalies').textContent = metrics.total_anomalies;
-            document.getElementById('maxAnomalyScore').textContent = metrics.max_score.toFixed(4);
-            document.getElementById('totalEvents').textContent = metrics.total_events;
-        }
-
-        // Fetch Data from API
-        async function fetchData() {
-            try {
-                const response = await fetch(API_URL);
-                const result = await response.json();
-                
-                allData = result.anomalies;
-                
-                updateMetrics(allData, result.metrics);
-                updateChart(allData);
-                renderAnomalyList(allData);
-                
-            } catch (error) {
-                console.error('Error fetching data:', error);
-                document.getElementById('loadingIndicator').textContent = 
-                    'Connection error. Please ensure the Flask server is running.';
-            }
-        }
-
-        // Show Anomaly Details Modal
-        function showAnomalyDetails(anomaly) {
-            document.getElementById('modalAnomalyId').textContent = anomaly.id;
-            document.getElementById('modalTimestamp').textContent = anomaly.timestamp;
-            document.getElementById('modalSeverity').textContent = anomaly.severity;
-            document.getElementById('modalScore').textContent = anomaly.anomaly_score.toFixed(4);
-            document.getElementById('modalTrueLabel').textContent = anomaly.true_label;
-            document.getElementById('modalPrediction').textContent = anomaly.prediction;
-            document.getElementById('modalAssetId').textContent = anomaly.asset_id;
-            document.getElementById('modalReason').textContent = anomaly.reason;
-            
-            try {
-                const formatted = JSON.stringify(JSON.parse(anomaly.raw_data), null, 2);
-                document.getElementById('modalRawData').textContent = formatted;
-            } catch (e) {
-                document.getElementById('modalRawData').textContent = anomaly.raw_data;
-            }
-            
-            // Generate actions based on severity
-            let actions = '';
-            if (anomaly.severity === 'High') {
-                actions = '1. Immediately isolate affected asset<br>2. Review all related logs for the past hour<br>3. Escalate to security team<br>4. Monitor for lateral movement';
-            } else if (anomaly.severity === 'Medium') {
-                actions = '1. Monitor asset for 15 minutes<br>2. Check for similar patterns on other assets<br>3. Update threat intelligence feeds<br>4. Document findings';
-            } else {
-                actions = '1. Log event for future reference<br>2. Continue monitoring<br>3. No immediate action required';
-            }
-            document.getElementById('modalActions').innerHTML = actions;
-            
-            document.getElementById('anomalyDetailModal').style.display = 'block';
-        }
-
-        function closeModal() {
-            document.getElementById('anomalyDetailModal').style.display = 'none';
-        }
-
-        // Filter Anomalies
-        function filterAnomalies(filter, button) {
-            currentFilter = filter;
-            document.querySelectorAll('.filter-btn').forEach(btn => 
-                btn.classList.remove('active')
-            );
-            button.classList.add('active');
-            renderAnomalyList(allData);
-        }
-
-        // Close modal on outside click
-        window.onclick = function(event) {
-            const modal = document.getElementById('anomalyDetailModal');
-            if (event.target === modal) {
-                closeModal();
-            }
-        }
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            initChart();
-            fetchData();
-            setInterval(fetchData, REFRESH_INTERVAL);
         });
-    </script>
+    }
+
+    // Update Chart with new data
+    function updateChart(data) {
+        if (!chartInstance) return;
+
+        const recentData = data.slice(-MAX_CHART_POINTS);
+        
+        // Use a consistent time format for the X-axis labels
+        const labels = recentData.map(d => new Date(d.timestamp).toLocaleTimeString());
+        
+        // This array must match the structure of the Flask JSON key 'value'
+        const scores = recentData.map(d => d.value); 
+        
+        // Scatter points for anomalies
+        const anomalyPoints = recentData
+            .filter(d => d.is_anomaly)
+            .map(d => ({
+                x: new Date(d.timestamp).toLocaleTimeString(),
+                y: d.value // Scatter point uses the primary 'value' from the data point
+            }));
+
+        chartInstance.data.labels = labels;
+        chartInstance.data.datasets[0].data = scores;
+        chartInstance.data.datasets[1].data = anomalyPoints;
+        chartInstance.update('none'); // Update without animation
+    }
+
+    // Render Anomaly List
+    function renderAnomalyList(data) {
+        const anomalyList = document.getElementById('anomalyList');
+        document.getElementById('loadingIndicator').style.display = 'none';
+
+        let filteredData = data.filter(d => d.is_anomaly);
+
+        if (currentFilter !== 'All') {
+            filteredData = filteredData.filter(d => d.severity === currentFilter);
+        }
+
+        // Sort by timestamp (newest first)
+        filteredData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        // Take only the last 20
+        const displayData = filteredData.slice(0, 20);
+
+        anomalyList.innerHTML = '';
+
+        if (displayData.length === 0) {
+            anomalyList.innerHTML = '<li style="background: #f0f0f0; border-left-color: #999; padding: 15px; border-radius: 8px;">No anomalies detected matching current filter.</li>';
+            return;
+        }
+
+        displayData.forEach(anomaly => {
+            const listItem = document.createElement('li');
+            listItem.onclick = () => showAnomalyDetails(anomaly);
+
+            const severityClass = `severity-${anomaly.severity.toLowerCase()}`;
+            const time = new Date(anomaly.timestamp).toLocaleTimeString();
+
+            listItem.innerHTML = `
+                <div class="anomaly-header">
+                    <span class="anomaly-id">ID: ${anomaly.id}</span>
+                    <span class="severity-badge ${severityClass}">${anomaly.severity}</span>
+                </div>
+                <div><strong>Time:</strong> ${time}</div>
+                <div><strong>Score:</strong> ${anomaly.anomaly_score.toFixed(4)}</div>
+                <div><strong>Asset:</strong> ${anomaly.asset_id}</div>
+                <div style="margin-top: 5px; color: #666;">${anomaly.reason}</div>
+            `;
+
+            anomalyList.appendChild(listItem);
+        });
+    }
+
+    // Update Metrics
+    function updateMetrics(metrics) {
+        // These keys must match the Python 'metrics' dict keys exactly
+        document.getElementById('totalAnomalies').textContent = metrics.total_anomalies;
+        document.getElementById('maxAnomalyScore').textContent = metrics.max_score.toFixed(4);
+        document.getElementById('totalEvents').textContent = metrics.total_events;
+    }
+
+    // Fetch Data from API
+    async function fetchData() {
+        try {
+            // FIX: Using relative path /api/anomalies (from previous discussion)
+            const response = await fetch(API_URL); 
+            
+            // Handle HTTP errors (e.g., 404, 500) gracefully
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            // The 'result' object must have two properties: 'anomalies' (array) and 'metrics' (object)
+            allData = result.anomalies;
+
+            updateMetrics(result.metrics);
+            updateChart(allData);
+            renderAnomalyList(allData);
+
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            document.getElementById('loadingIndicator').textContent =
+                `Connection error: ${error.message}. Check Flask logs.`;
+        }
+    }
+
+    // Show Anomaly Details Modal
+    function showAnomalyDetails(anomaly) {
+        document.getElementById('modalAnomalyId').textContent = anomaly.id;
+        document.getElementById('modalTimestamp').textContent = new Date(anomaly.timestamp).toLocaleString();
+        document.getElementById('modalSeverity').textContent = anomaly.severity;
+        document.getElementById('modalScore').textContent = anomaly.anomaly_score.toFixed(4);
+        document.getElementById('modalTrueLabel').textContent = anomaly.true_label;
+        document.getElementById('modalPrediction').textContent = anomaly.prediction;
+        document.getElementById('modalAssetId').textContent = anomaly.asset_id;
+        document.getElementById('modalReason').textContent = anomaly.reason;
+        
+        // Attempt to pretty-print raw data JSON
+        try {
+            const formatted = JSON.stringify(JSON.parse(anomaly.raw_data), null, 2);
+            document.getElementById('modalRawData').textContent = formatted;
+        } catch (e) {
+            document.getElementById('modalRawData').textContent = anomaly.raw_data;
+        }
+        
+        // Generate actions based on severity
+        let actions = '';
+        if (anomaly.severity === 'High') {
+            actions = '1. Immediately isolate affected asset<br>2. Review all related logs for the past hour<br>3. Escalate to security team<br>4. Monitor for lateral movement';
+        } else if (anomaly.severity === 'Medium') {
+            actions = '1. Monitor asset for 15 minutes<br>2. Check for similar patterns on other assets<br>3. Update threat intelligence feeds<br>4. Document findings';
+        } else {
+            actions = '1. Log event for future reference<br>2. Continue monitoring<br>3. No immediate action required';
+        }
+        document.getElementById('modalActions').innerHTML = actions;
+        
+        document.getElementById('anomalyDetailModal').style.display = 'block';
+    }
+
+    function closeModal() {
+        document.getElementById('anomalyDetailModal').style.display = 'none';
+    }
+
+    // Filter Anomalies
+    function filterAnomalies(filter, button) {
+        currentFilter = filter;
+        document.querySelectorAll('.filter-btn').forEach(btn =>
+            btn.classList.remove('active')
+        );
+        button.classList.add('active');
+        renderAnomalyList(allData);
+    }
+
+    // Close modal on outside click
+    window.onclick = function(event) {
+        const modal = document.getElementById('anomalyDetailModal');
+        if (event.target === modal) {
+            closeModal();
+        }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        initChart();
+        fetchData();
+        setInterval(fetchData, REFRESH_INTERVAL);
+    });
+</script>
 </body>
 </html>
+
 
