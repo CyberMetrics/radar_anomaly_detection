@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 import pandas as pd
 import numpy as np
@@ -7,240 +7,305 @@ import tensorflow as tf
 import random
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import warnings
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
-app = Flask(__name__)
-CORS(app)  # Enable CORS for cross-origin requests
+app = Flask(__name__, template_folder='templates')
+CORS(app)
 
-# Global variables to store real-time data
+# ==========================================
+# POSTGRESQL CONFIG
+# ==========================================
+PG_CONN = {
+    "host": "localhost",
+    "database": "radar",
+    "user": "postgres",
+    "password": "123",    # <<< CHANGE THIS
+    "port": 5432
+}
+
+def get_pg_connection():
+    return psycopg2.connect(
+        host=PG_CONN["host"],
+        database=PG_CONN["database"],
+        user=PG_CONN["user"],
+        password=PG_CONN["password"],
+        port=PG_CONN["port"]
+    )
+
+# ==========================================
+# MEMORY BUFFER
+# ==========================================
 anomaly_buffer = []
 buffer_lock = threading.Lock()
 MAX_BUFFER_SIZE = 100
 
-# === LOAD PRODUCTION ASSETS ===
-def load_production_assets():
-    """Load trained model, scaler, and threshold"""
+
+# ==========================================
+# INSERT INTO POSTGRES
+# ==========================================
+def insert_anomaly(entry):
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO anomalies 
+        (anomaly_id, timestamp, value, anomaly_score, is_anomaly,
+         true_label, prediction, severity, status, reason, asset_id, raw_data)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        entry["id"], entry["timestamp"], entry["value"], entry["anomaly_score"],
+        entry["is_anomaly"], entry["true_label"], entry["prediction"],
+        entry["severity"], entry["status"], entry["reason"],
+        entry["asset_id"], entry["raw_data"]
+    ))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# ==========================================
+# QUERY POSTGRES
+# ==========================================
+def query_anomalies(start=None, end=None, limit=2000):
+    conn = get_pg_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    q = "SELECT * FROM anomalies"
+    params = []
+
+    if start and end:
+        q += " WHERE timestamp BETWEEN %s AND %s"
+        params += [start, end]
+
+    q += " ORDER BY timestamp ASC"
+
+    if limit:
+        q += " LIMIT %s"
+        params.append(limit)
+
+    cur.execute(q, params)
+    rows = cur.fetchall()
+
+    for r in rows:
+        if isinstance(r["timestamp"], datetime):
+            r["timestamp"] = r["timestamp"].strftime("%Y-%m-%dT%H:%M:%S")
+
+    cur.close()
+    conn.close()
+    return rows
+
+
+# ==========================================
+# MODEL LOADING & POOLS
+# ==========================================
+def load_assets():
     try:
-        model = tf.keras.models.load_model('champion_autoencoder_model.keras')
-        scaler = joblib.load('nsl_kdd_scaler.joblib')
-        with open('anomaly_threshold.txt', 'r') as f:
-            threshold = float(f.read())
-        print("✅ Production assets loaded successfully")
-        return model, scaler, threshold
-    except Exception as e:
-        print(f"❌ Error loading assets: {e}")
-        return None, None, None
+        model = tf.keras.models.load_model("champion_autoencoder_model.keras")
+    except:
+        model = None
 
-# === GET MASTER COLUMNS ===
+    try:
+        scaler = joblib.load("nsl_kdd_scaler.joblib")
+    except:
+        scaler = None
+
+    try:
+        with open("anomaly_threshold.txt") as f:
+            threshold = float(f.read().strip())
+    except:
+        threshold = 0.01
+
+    return model, scaler, threshold
+
+
 def get_master_columns():
-    """Build master column list from training data"""
-    col_names_full = [
-        'duration', 'protocol_type', 'service', 'flag', 'src_bytes', 'dst_bytes', 
-        'land', 'wrong_fragment', 'urgent', 'hot', 'num_failed_logins', 'logged_in', 
-        'num_compromised', 'root_shell', 'su_attempted', 'num_root', 
-        'num_file_creations', 'num_shells', 'num_access_files', 'num_outbound_cmds', 
-        'is_host_login', 'is_guest_login', 'count', 'srv_count', 'serror_rate', 
-        'srv_serror_rate', 'rerror_rate', 'srv_rerror_rate', 'same_srv_rate', 
-        'diff_srv_rate', 'srv_diff_host_rate', 'dst_host_count', 'dst_host_srv_count', 
-        'dst_host_same_srv_rate', 'dst_host_diff_srv_rate', 
-        'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate', 
-        'dst_host_serror_rate', 'dst_host_srv_serror_rate', 'dst_host_rerror_rate', 
-        'dst_host_srv_rerror_rate', 'label', 'difficulty'
+    cols = [
+        'duration','protocol_type','service','flag','src_bytes','dst_bytes','land',
+        'wrong_fragment','urgent','hot','num_failed_logins','logged_in','num_compromised',
+        'root_shell','su_attempted','num_root','num_file_creations','num_shells',
+        'num_access_files','num_outbound_cmds','is_host_login','is_guest_login','count',
+        'srv_count','serror_rate','srv_serror_rate','rerror_rate','srv_rerror_rate',
+        'same_srv_rate','diff_srv_rate','srv_diff_host_rate','dst_host_count',
+        'dst_host_srv_count','dst_host_same_srv_rate','dst_host_diff_srv_rate',
+        'dst_host_same_src_port_rate','dst_host_srv_diff_host_rate',
+        'dst_host_serror_rate','dst_host_srv_serror_rate','dst_host_rerror_rate',
+        'dst_host_srv_rerror_rate','label','difficulty'
     ]
-    
-    df_train = pd.read_csv('KDDTrain+.txt', header=None, names=col_names_full)
-    df_train = df_train.drop(['label', 'difficulty'], axis=1)
-    categorical_cols = ['protocol_type', 'service', 'flag']
-    df_train_encoded = pd.get_dummies(df_train, columns=categorical_cols, dtype=int)
-    return df_train_encoded.columns
+    df = pd.read_csv("KDDTrain+.txt", header=None, names=cols)
+    df = df.drop(['label','difficulty'], axis=1)
+    df = pd.get_dummies(df, columns=['protocol_type','service','flag'])
+    return df.columns
 
-# === LOAD DATA POOLS ===
-def load_data_pools(master_columns, scaler):
-    """Load normal and attack data pools"""
-    col_names_full = [
-        'duration', 'protocol_type', 'service', 'flag', 'src_bytes', 'dst_bytes', 
-        'land', 'wrong_fragment', 'urgent', 'hot', 'num_failed_logins', 'logged_in', 
-        'num_compromised', 'root_shell', 'su_attempted', 'num_root', 
-        'num_file_creations', 'num_shells', 'num_access_files', 'num_outbound_cmds', 
-        'is_host_login', 'is_guest_login', 'count', 'srv_count', 'serror_rate', 
-        'srv_serror_rate', 'rerror_rate', 'srv_rerror_rate', 'same_srv_rate', 
-        'diff_srv_rate', 'srv_diff_host_rate', 'dst_host_count', 'dst_host_srv_count', 
-        'dst_host_same_srv_rate', 'dst_host_diff_srv_rate', 
-        'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate', 
-        'dst_host_serror_rate', 'dst_host_srv_serror_rate', 'dst_host_rerror_rate', 
-        'dst_host_srv_rerror_rate', 'label', 'difficulty'
+
+def load_pools(master, scaler):
+    cols = [
+        'duration','protocol_type','service','flag','src_bytes','dst_bytes','land',
+        'wrong_fragment','urgent','hot','num_failed_logins','logged_in','num_compromised',
+        'root_shell','su_attempted','num_root','num_file_creations','num_shells',
+        'num_access_files','num_outbound_cmds','is_host_login','is_guest_login','count',
+        'srv_count','serror_rate','srv_serror_rate','rerror_rate','srv_rerror_rate',
+        'same_srv_rate','diff_srv_rate','srv_diff_host_rate','dst_host_count',
+        'dst_host_srv_count','dst_host_same_srv_rate','dst_host_diff_srv_rate',
+        'dst_host_same_src_port_rate','dst_host_srv_diff_host_rate',
+        'dst_host_serror_rate','dst_host_srv_serror_rate','dst_host_rerror_rate',
+        'dst_host_srv_rerror_rate','label','difficulty'
     ]
-    
-    df_train = pd.read_csv('KDDTrain+.txt', header=None, names=col_names_full)
-    df_test = pd.read_csv('KDDTest+.txt', header=None, names=col_names_full)
-    df_full = pd.concat([df_train, df_test], ignore_index=True)
-    
-    df_full['true_label'] = np.where(df_full['label'] == 'normal', 'Normal', 'Attack')
-    df_full = df_full.drop(['label', 'difficulty'], axis=1)
-    
-    categorical_cols = ['protocol_type', 'service', 'flag']
-    df_encoded = pd.get_dummies(df_full.drop('true_label', axis=1), 
-                                 columns=categorical_cols, dtype=int)
-    df_reindexed = df_encoded.reindex(columns=master_columns, fill_value=0)
-    
-    normal_indices = df_full[df_full['true_label'] == 'Normal'].index
-    attack_indices = df_full[df_full['true_label'] == 'Attack'].index
-    
-    normal_logs_scaled = scaler.transform(df_reindexed.loc[normal_indices])
-    attack_logs_scaled = scaler.transform(df_reindexed.loc[attack_indices])
-    normal_logs_display = df_full.loc[normal_indices]
-    attack_logs_display = df_full.loc[attack_indices]
-    
-    print(f"✅ Data pools created. Normal: {len(normal_logs_scaled)}, Attack: {len(attack_logs_scaled)}")
-    return (normal_logs_scaled, normal_logs_display), (attack_logs_scaled, attack_logs_display)
 
-# === PREDICTION FUNCTIONS ===
-def get_new_log_row(normal_pools, attack_pools, anomaly_chance=0.20):
-    """Sample a random log from pools"""
-    if random.random() < anomaly_chance:
-        pool_scaled, pool_display = attack_pools
-        true_label = "Attack"
-    else:
-        pool_scaled, pool_display = normal_pools
-        true_label = "Normal"
-    
-    idx = random.randint(0, len(pool_scaled) - 1)
-    log_scaled = pool_scaled[idx]
-    log_display = pool_display.iloc[idx]
-    
-    return log_scaled, log_display, true_label
+    train = pd.read_csv("KDDTrain+.txt", header=None, names=cols)
+    test = pd.read_csv("KDDTest+.txt", header=None, names=cols)
 
-def get_severity(score, threshold):
-    """Calculate severity based on score"""
-    if score < threshold:
-        return "Low", "Normal"
-    
-    severity_factor = score / threshold
-    if severity_factor > 5:
-        return "High", "CRITICAL"
-    elif severity_factor > 2:
-        return "Medium", "High"
-    else:
-        return "Medium", "Medium"
+    full = pd.concat([train,test], ignore_index=True)
+    full["true_label"] = full["label"].apply(lambda x: "Normal" if x=="normal" else "Attack")
+    full = full.drop(['label','difficulty'], axis=1)
 
-def predict_log(log_scaled, log_display, true_label, model, threshold):
-    """Run prediction on a single log"""
-    log_scaled = np.array([log_scaled])
-    reconstruction = model.predict(log_scaled, verbose=0)
-    mse = np.mean(np.power(log_scaled - reconstruction, 2), axis=1)[0]
-    
-    is_anomaly = (mse > threshold)
-    prediction = "Attack" if is_anomaly else "Normal"
-    severity, priority = get_severity(mse, threshold)
-    
-    # Generate reason based on score
-    if is_anomaly:
-        if mse > threshold * 5:
-            reason = "Critical anomaly detected - Immediate investigation required"
-        elif mse > threshold * 2:
-            reason = "Suspicious activity pattern detected"
-        else:
-            reason = "Moderate deviation from normal behavior"
-    else:
-        reason = "Normal behavior pattern"
-    
+    df = pd.get_dummies(full.drop('true_label', axis=1))
+    df = df.reindex(columns=master, fill_value=0)
+
+    normal_idxs = full[full["true_label"]=="Normal"].index
+    attack_idxs = full[full["true_label"]=="Attack"].index
+
+    normal_scaled = scaler.transform(df.loc[normal_idxs])
+    attack_scaled = scaler.transform(df.loc[attack_idxs])
+
+    normal_disp = full.loc[normal_idxs].reset_index(drop=True)
+    attack_disp = full.loc[attack_idxs].reset_index(drop=True)
+
+    return (normal_scaled, normal_disp), (attack_scaled, attack_disp)
+
+
+# ==========================================
+# PREDICTION MODEL
+# ==========================================
+def predict_event(log, disp, true, model, threshold):
+    try:
+        recon = model.predict(log.reshape(1,-1), verbose=0)
+        mse = float(np.mean((log - recon)**2))
+    except:
+        mse = float(np.mean(np.abs(log)) * 1e-3)
+
+    sev = "Low"
+    if mse > threshold * 5: sev = "High"
+    elif mse > threshold * 2: sev = "Medium"
+
+    is_anom = mse > threshold
+
     return {
-        'id': random.randint(1000, 9999),
-        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'value': float(mse * 100),  # Scale for visualization
-        'anomaly_score': float(mse),
-        'is_anomaly': bool(is_anomaly),
-        'true_label': true_label,
-        'prediction': prediction,
-        'severity': severity,
-        'status': 'New' if is_anomaly else 'Closed',
-        'reason': reason,
-        'asset_id': f"{log_display['protocol_type']}-{log_display['service'][:10]}",
-        'raw_data': f'{{"protocol": "{log_display["protocol_type"]}", "service": "{log_display["service"]}", "score": {mse:.4f}}}'
+        "id": random.randint(100000,999999),
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"),
+        "value": mse*100,
+        "anomaly_score": mse,
+        "is_anomaly": is_anom,
+        "true_label": true,
+        "prediction": "Attack" if is_anom else "Normal",
+        "severity": sev,
+        "status": "New" if is_anom else "Closed",
+        "reason": "Suspicious activity detected" if is_anom else "Normal",
+        "asset_id": f"{disp['protocol_type']}-{str(disp['service'])[:8]}",
+        "raw_data": f'{{"protocol":"{disp["protocol_type"]}","service":"{disp["service"]}","score":{mse:.6f}}}'
     }
 
-# === BACKGROUND THREAD FOR CONTINUOUS DETECTION ===
-def continuous_detection_worker():
-    """Background thread that continuously generates predictions"""
-    global anomaly_buffer
-    
-    model, scaler, threshold = load_production_assets()
-    if model is None:
-        print("❌ Cannot start detection - assets not loaded")
-        return
-    
-    master_columns = get_master_columns()
-    normal_pools, attack_pools = load_data_pools(master_columns, scaler)
-    
-    print("🚀 Starting continuous anomaly detection...")
-    
+
+# ==========================================
+# BACKGROUND THREAD
+# ==========================================
+def detection_worker():
+    model, scaler, threshold = load_assets()
+    master = get_master_columns()
+    normal_pool, attack_pool = load_pools(master, scaler)
+
     while True:
-        try:
-            # Generate prediction
-            log_scaled, log_display, true_label = get_new_log_row(
-                normal_pools, attack_pools, anomaly_chance=0.20
-            )
-            result = predict_log(log_scaled, log_display, true_label, model, threshold)
-            
-            # Add to buffer
-            with buffer_lock:
-                anomaly_buffer.append(result)
-                if len(anomaly_buffer) > MAX_BUFFER_SIZE:
-                    anomaly_buffer.pop(0)
-            
-            time.sleep(1)  # Generate one prediction per second
-            
-        except Exception as e:
-            print(f"Error in detection worker: {e}")
-            time.sleep(5)
+        scaled, disp, true = (
+            *(attack_pool if random.random() < 0.2 else normal_pool),
+            "Attack" if random.random() < 0.2 else "Normal"
+        )
 
-# === FLASK ROUTES ===
-@app.route('/')
+        idx = random.randint(0, len(scaled)-1)
+        entry = predict_event(scaled[idx], disp.iloc[idx], true, model, threshold)
+
+        with buffer_lock:
+            anomaly_buffer.append(entry)
+            if len(anomaly_buffer) > MAX_BUFFER_SIZE:
+                anomaly_buffer.pop(0)
+
+        insert_anomaly(entry)
+        time.sleep(1)
+
+
+# ==========================================
+# API ROUTES
+# ==========================================
+@app.route("/")
 def index():
-    """Serve the dashboard HTML"""
-    return render_template('dashboard.html')
+    return render_template("dashboard.html")
 
-@app.route('/api/anomalies')
-def get_anomalies():
-    """API endpoint to get current anomalies"""
+
+@app.route("/api/anomalies")
+def api_live():
     with buffer_lock:
         data = anomaly_buffer.copy()
-    
-    # Calculate metrics
-    total_anomalies = sum(1 for d in data if d['is_anomaly'])
-    max_score = max([d['anomaly_score'] for d in data], default=0)
-    
+
     return jsonify({
-        'anomalies': data,
-        'metrics': {
-            'total_anomalies': total_anomalies,
-            'max_score': round(max_score, 4),
-            'total_events': len(data)
-        }
+        "anomalies": data,
+        "error": None
     })
 
-@app.route('/api/latest')
-def get_latest():
-    """Get only the latest anomaly"""
-    with buffer_lock:
-        if anomaly_buffer:
-            return jsonify(anomaly_buffer[-1])
-        return jsonify({})
 
-if __name__ == '__main__':
-    # Start background detection thread
-    detection_thread = threading.Thread(target=continuous_detection_worker, daemon=True)
-    detection_thread.start()
-    
-    # Start Flask server
-    print("\n" + "="*60)
-    print("🚀 RADAR Anomaly Detection System Starting...")
-    print("="*60)
-    print("📊 Dashboard: http://localhost:5000")
-    print("🔌 API Endpoint: http://localhost:5000/api/anomalies")
-    print("="*60 + "\n")
-    
-    app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)
+@app.route("/api/latest")
+def latest():
+    with buffer_lock:
+        return jsonify(anomaly_buffer[-1] if anomaly_buffer else {})
+
+
+@app.route("/api/anomalies/history")
+def api_history():
+    rng = request.args.get("range")
+    start = request.args.get("start")
+    end = request.args.get("end")
+    limit = int(request.args.get("limit", 2500))
+
+    if rng:
+        now = datetime.utcnow()
+        if rng == "today":
+            start = datetime(now.year,now.month,now.day).strftime("%Y-%m-%dT%H:%M:%S")
+            end = now.strftime("%Y-%m-%dT%H:%M:%S")
+        elif rng == "yesterday":
+            today = datetime(now.year,now.month,now.day)
+            start = (today - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
+            end = (today - timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%S")
+        elif rng == "2days":
+            end = now.strftime("%Y-%m-%dT%H:%M:%S")
+            start = (now - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S")
+
+    items = query_anomalies(start, end, limit)
+    return jsonify({"anomalies": items, "error": None})
+
+
+@app.route("/api/anomalies/<int:aid>")
+def api_single(aid):
+    conn = get_pg_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM anomalies WHERE anomaly_id=%s LIMIT 1", (aid,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if row and isinstance(row["timestamp"], datetime):
+        row["timestamp"] = row["timestamp"].strftime("%Y-%m-%dT%H:%M:%S")
+
+    return jsonify(row if row else {})
+
+
+# ==========================================
+# START SERVER
+# ==========================================
+if __name__ == "__main__":
+    threading.Thread(target=detection_worker, daemon=True).start()
+    print("🚀 RADAR running at http://localhost:5000")
+    app.run(host="0.0.0.0", port=5000)
+
