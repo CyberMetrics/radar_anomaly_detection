@@ -1,540 +1,357 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>RADAR - Real-Time Anomaly Dashboard</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>R.A.D.A.R | COMMAND</title>
 
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@500;800;900&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
-<!-- Plotly -->
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --bg-core: #050505;
+            --bg-panel: rgba(12, 12, 12, 0.85); 
+            --border-panel: rgba(255, 255, 255, 0.12);
+            --text-main: #F5F5F5;
+            --text-dim: #888;
+            
+            /* CYBER PALETTE */
+            --c-safe: #CCFF00;  /* Lime */
+            --c-info: #00E5FF;  /* Cyan */
+            --c-warn: #FFD600;  /* Yellow */
+            --c-crit: #FF0055;  /* Magenta/Red */
+        }
 
-<style>
-    :root { --grad: linear-gradient(135deg,#667eea,#764ba2); }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg-core); font-family: 'JetBrains Mono'; color: var(--text-main); overflow-y: auto; overflow-x: hidden; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
-    body {
-        margin:0;
-        font-family:'Segoe UI',sans-serif;
-        background: var(--grad);
-        color:#222;
-    }
+        /* BACKGROUNDS */
+        #star-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        .bg-grid { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 40px 40px; }
 
-    /* NAVBAR */
-    .navbar {
-        position:fixed; top:0; left:0; right:0; height:62px;
-        background:#fff;
-        z-index:9999;
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        padding:0 22px;
-        box-shadow:0 5px 18px rgba(0,0,0,0.15);
-        font-weight:700;
-    }
-    .navbar .title { font-size:18px; font-weight:700; color:#444; }
+        /* LAYOUT */
+        #app { position: relative; z-index: 10; padding: 20px 40px; max-width: 1800px; margin: 0 auto; }
 
-    /* Layout */
-    .container {
-        max-width:1400px;
-        margin:84px auto 30px;
-        padding:0 16px;
-    }
+        /* HEADER */
+        header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--border-panel); margin-bottom: 30px; position: sticky; top: 0; background: rgba(5,5,5,0.95); z-index: 100; backdrop-filter: blur(10px); }
+        .brand { font-family: 'Montserrat'; font-weight: 900; font-size: 1.5rem; color: white; text-decoration: none; letter-spacing: -1px; }
+        .brand span { color: var(--c-safe); }
 
-    /* Controls */
-    .controls {
-        display:flex; gap:8px; align-items:center;
-        flex-wrap:wrap; margin-bottom:12px;
-    }
-    .btn {
-        padding:5px 10px;
-        border-radius:12px;
-        background:rgba(255,255,255,0.16);
-        border:1px solid rgba(255,255,255,0.18);
-        font-size:13px;
-        color:#fff;
-        cursor:pointer;
-    }
-    .btn.active { background:#fff; color:#333; border-color:#ccc; }
+        .controls button { background: transparent; border: 1px solid #333; color: #666; padding: 8px 16px; margin-left: 5px; font-family: 'JetBrains Mono'; font-weight: 700; cursor: pointer; transition: 0.3s; text-transform: uppercase; }
+        .controls button.active { border-color: var(--c-safe); color: var(--c-safe); background: rgba(204,255,0,0.1); }
 
-    input[type="datetime-local"] {
-        padding:6px; border-radius:6px;
-        border:1px solid #ccc; background:#fff;
-    }
+        /* PANELS */
+        .panel { background: var(--bg-panel); border: 1px solid var(--border-panel); border-radius: 4px; padding: 20px; display: flex; flex-direction: column; position: relative; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+        .panel h3 { font-family: 'Montserrat'; font-weight: 800; font-size: 0.8rem; color: var(--text-dim); margin: 0 0 15px 0; letter-spacing: 1px; display: flex; justify-content: space-between; text-transform: uppercase; }
 
-    .card {
-        background:#fff;
-        padding:14px;
-        border-radius:12px;
-        box-shadow:0 6px 18px rgba(0,0,0,0.12);
-        margin-bottom:16px;
-    }
+        /* KPIS */
+        .row-kpi { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; height: 140px; margin-bottom: 20px; }
+        .kpi-val { font-family: 'Montserrat'; font-weight: 900; font-size: 2.5rem; line-height: 1; margin-top: auto; }
+        .kpi-sub { font-size: 0.65rem; color: var(--text-dim); font-weight: 700; margin-top: 8px; letter-spacing: 1px; }
 
-    /* Metrics */
-    .metrics { display:flex; gap:12px; }
-    .metric { flex:1; padding:16px; border-radius:10px; color:#fff; text-align:center; }
-    .m1 { background:linear-gradient(135deg,#f093fb,#f5576c); }
-    .m2 { background:linear-gradient(135deg,#4facfe,#00f2fe); }
-    .m3 { background:linear-gradient(135deg,#43e97b,#38f9d7); }
+        /* MAIN ROW */
+        .row-main { display: grid; grid-template-columns: 3fr 1fr; gap: 20px; height: 500px; margin-bottom: 20px; }
+        
+        /* HUD BOXES */
+        .hud-container { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; position: relative; z-index: 20; }
+        .hud-box { background: rgba(0,0,0,0.6); border: 1px solid #333; padding: 10px 15px; font-size: 0.7rem; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; }
+        .hud-raw { color: #888; border-left: 3px solid var(--c-info); }
+        .hud-pred { color: var(--c-safe); border-left: 3px solid var(--c-safe); font-weight: 700; }
+        .hud-label { color: #555; margin-right: 10px; font-weight: 700; }
 
-    /* Grid */
-    .row { display:flex; gap:12px; flex-wrap:wrap; }
-    .col-2 { flex:2; }
-    .col-1 { flex:1; }
+        /* ASSET PIES */
+        .row-pies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; height: 450px; margin-bottom: 20px; }
 
-    /* Anomaly List */
-    #anomalyList { list-style:none; padding:0; max-height:420px; overflow-y:auto; }
-    #anomalyList li {
-        background:#fafafa; border-left:5px solid #ef4b4b;
-        margin-bottom:8px; padding:12px; border-radius:8px;
-        cursor:pointer;
-    }
+        /* DEEP DIVE */
+        .row-deep { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; height: 450px; margin-bottom: 20px; }
 
-    .sev { padding:4px 8px; border-radius:8px; font-size:12px; font-weight:700; }
-    .High { background:#dc3545; color:#fff; }
-    .Medium { background:#ffc107; color:#333; }
-    .Low { background:#28a745; color:#fff; }
+        /* TABLE */
+        .row-table { display: grid; grid-template-columns: 1fr; min-height: 400px; margin-bottom: 50px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+        th { text-align: left; padding: 15px; color: var(--c-safe); border-bottom: 1px solid #333; background: rgba(255,255,255,0.05); position: sticky; top: 0; }
+        td { padding: 12px; border-bottom: 1px solid #222; }
+        .badge { padding: 3px 8px; border-radius: 2px; font-weight: 700; font-size: 0.65rem; border:1px solid; }
+        .b-High { color: var(--c-crit); border-color:var(--c-crit); background: rgba(255,0,85,0.1); }
+        .b-Medium { color: var(--c-warn); border-color:var(--c-warn); background: rgba(255,214,0,0.1); }
+        .b-Low { color: var(--c-info); border-color:var(--c-info); background: rgba(0,229,255,0.1); }
+        .b-Safe { color: var(--c-safe); border-color:var(--c-safe); background: rgba(204,255,0,0.1); }
 
-    /* Toast */
-    #toast {
-        position:fixed; right:20px; bottom:20px; background:#fff;
-        padding:12px; display:none;
-        border-left:6px solid #f5576c;
-        border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.3);
-        z-index:99999;
-    }
-
-    /* Modal */
-    .modal {
-        display:none; position:fixed; left:0; top:0; right:0; bottom:0;
-        background:rgba(0,0,0,0.65);
-        z-index:20000;
-    }
-    .modal .box {
-        background:#fff; border-radius:10px;
-        width:90%; max-width:900px; margin:40px auto; padding:18px;
-        max-height:80vh; overflow-y:auto; position:relative;
-    }
-    .modal-close {
-        position:absolute;
-        top:12px;
-        right:14px;
-        font-size:28px;
-        font-weight:700;
-        color:#444;
-        cursor:pointer;
-        z-index:30000;
-    }
-    .modal-close:hover { color:#000; }
-
-    @media (max-width:800px){
-        .row { flex-direction:column; }
-    }
-</style>
-
+        /* --- MODAL STYLES --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px);
+            z-index: 2000; display: none; align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background: #0a0a0a; border: 1px solid var(--c-safe);
+            width: 600px; max-width: 90%; padding: 30px;
+            box-shadow: 0 0 50px rgba(204, 255, 0, 0.1);
+            position: relative; border-radius: 4px;
+        }
+        .modal-close {
+            position: absolute; top: 15px; right: 20px; cursor: pointer;
+            color: #666; font-size: 1.5rem;
+        }
+        .modal-close:hover { color: white; }
+        .detail-row { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 10px; font-size: 0.8rem; }
+        .detail-label { color: #666; font-weight: 700; }
+        .detail-val { color: var(--text-main); font-family: 'JetBrains Mono'; }
+        pre {
+            background: #000; padding: 15px; border: 1px solid #333;
+            color: var(--c-safe); overflow-x: auto; margin-top: 20px;
+            font-size: 0.75rem; border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
 
-<div class="navbar">
-    <div class="title">RADAR — Real-Time Anomaly Detection</div>
-    <div style="font-size:13px;color:#555;">Live</div>
-</div>
+<canvas id="star-canvas"></canvas>
+<div class="bg-grid"></div>
 
-<div class="container">
+<div id="app">
+    <header>
+        <a href="/" class="brand">&lt; R.A.D.A.R <span>//</span> INTEL</a>
+        <div class="controls">
+            <button class="active" onclick="setMode('buffer')">LIVE STREAM</button>
+            <button onclick="setMode('today')">24 HOURS</button>
+            <button onclick="setMode('week')">7 DAYS</button>
+            <button onclick="window.location.href='/forensics'" style="border-color: #FF0055; color: #FF0055; margin-left: 20px;">
+        [ OPEN FORENSICS ]
+    </button>
+            <label style="margin-left:15px; font-size:0.7rem; cursor:pointer; color:#888;">
+                <input type="checkbox" id="sampleToggle" checked> LIMIT DATA (200)
+            </label>
+        </div>
+    </header>
 
-    <!-- Controls -->
-    <div class="controls">
-        <div style="color:#fff;font-weight:700;">Time:</div>
-        <button class="btn active" onclick="setRange('buffer',this)">Live</button>
-        <button class="btn" onclick="setRange('today',this)">Today</button>
-        <button class="btn" onclick="setRange('yesterday',this)">Yesterday</button>
-        <button class="btn" onclick="setRange('2days',this)">Last 2 days</button>
-        <input id="startDT" type="datetime-local" step="1" />
-        <input id="endDT" type="datetime-local" step="1" />
-        <button class="btn" onclick="applyCustom()">Apply</button>
-
-        <div style="width:20px;"></div>
-
-        <div style="color:#fff;font-weight:700;">Filter:</div>
-        <button class="btn" onclick="filterList('All')">All</button>
-        <button class="btn" onclick="filterList('High')">High</button>
-        <button class="btn" onclick="filterList('Medium')">Medium</button>
-        <button class="btn" onclick="filterList('Low')">Low</button>
+    <div class="row-kpi">
+        <div class="panel"><h3>LIFETIME EVENTS</h3><div class="kpi-val" id="val-db-total" style="color: #FFF;">0</div><div class="kpi-sub">TOTAL DB RECORDS</div></div>
+        <div class="panel"><h3>EVENTS IN VIEW</h3><div class="kpi-val" id="val-view-total" style="color: var(--c-info)">0</div><div class="kpi-sub">CURRENT SELECTION</div></div>
+        <div class="panel"><h3>MAX RISK SCORE</h3><div class="kpi-val" id="val-score" style="color: var(--c-crit)">0.00</div><div class="kpi-sub">PEAK MSE</div></div>
+        <div class="panel"><h3>ANOMALIES</h3><div class="kpi-val" id="val-anom" style="color: var(--c-warn)">0</div><div class="kpi-sub">IN CURRENT VIEW</div></div>
+        <div class="panel"><h3>INTEGRITY</h3><div class="kpi-val" id="val-health" style="color: var(--c-safe)">100%</div><div class="kpi-sub">HEALTH SCORE</div></div>
     </div>
 
-    <!-- Metrics -->
-    <div class="metrics">
-        <div class="metric m1">
-            <div>Total Anomalies</div>
-            <div style="font-size:28px;font-weight:800" id="totalAnomalies">0</div>
+    <div class="row-main">
+        <div class="panel">
+            <h3>LIVE SIGNAL INTELLIGENCE</h3>
+            <div class="hud-container">
+                <div class="hud-box hud-raw" id="hud-raw"><span><span class="hud-label">RAW_STREAM:</span> ...</span></div>
+                <div class="hud-box hud-pred" id="hud-pred">
+                    <span><span class="hud-label">ID:</span> --</span>
+                    <span><span class="hud-label">ASSET:</span> --</span>
+                    <span><span class="hud-label">MSE:</span> 0.0000</span>
+                </div>
+            </div>
+            <div style="flex:1; position:relative; min-height:0;"><canvas id="mainChart"></canvas></div>
         </div>
-        <div class="metric m2">
-            <div>Max Score</div>
-            <div style="font-size:28px;font-weight:800" id="maxScore">0.00</div>
-        </div>
-        <div class="metric m3">
-            <div>Total Events</div>
-            <div style="font-size:28px;font-weight:800" id="totalEvents">0</div>
-        </div>
-    </div>
-
-    <!-- Main line chart + Overall Pie -->
-    <div class="row">
-        <div class="col-2 card">
-            <h3>Score vs Time (Clickable)</h3>
-            <canvas id="mainChart" style="height:330px;"></canvas>
-        </div>
-        <div class="col-1 card">
-            <h3>Severity Distribution (3D Pie)</h3>
-            <div id="overallPie" style="height:310px;"></div>
-            <small>Click a slice to filter anomalies</small>
+        <div class="panel">
+            <h3>THREAT SEVERITY</h3>
+            <div style="flex:1;"><canvas id="pieMain"></canvas></div>
         </div>
     </div>
 
-    <!-- Detailed Asset-Based Pie Charts -->
-    <div class="row">
-        <div class="col-1 card">
-            <h4>High Severity — Asset Breakdown</h4>
-            <div id="pieHigh" style="height:260px;"></div>
-        </div>
-        <div class="col-1 card">
-            <h4>Medium Severity — Asset Breakdown</h4>
-            <div id="pieMedium" style="height:260px;"></div>
-        </div>
-        <div class="col-1 card">
-            <h4>Low Severity — Asset Breakdown</h4>
-            <div id="pieLow" style="height:260px;"></div>
+    <div class="row-pies">
+        <div class="panel"><h3>HIGH SEVERITY ASSETS</h3><div style="flex:1;"><canvas id="pieHigh"></canvas></div></div>
+        <div class="panel"><h3>MEDIUM SEVERITY ASSETS</h3><div style="flex:1;"><canvas id="pieMed"></canvas></div></div>
+        <div class="panel"><h3>LOW SEVERITY ASSETS</h3><div style="flex:1;"><canvas id="pieLow"></canvas></div></div>
+    </div>
+
+    <div class="row-deep">
+        <div class="panel"><h3>MULTIDIMENSIONAL CLUSTER</h3><div id="scatter3d" style="width:100%; height:100%;"></div></div>
+        <div class="panel">
+            <h3>ATTACK SURFACE [ RADAR ]</h3>
+            <div style="flex:1; position: relative; padding: 10px;"><canvas id="radarChart"></canvas></div>
         </div>
     </div>
 
-    <!-- 3D scatter -->
-    <div class="card">
-        <h3>3D Scatter — Score vs Value vs Time</h3>
-        <div id="scatter3d" style="height:420px;"></div>
-        <div id="scatterExplanation" style="margin-top:6px;color:#444;"></div>
-    </div>
-
-    <!-- All anomalies -->
-    <div class="card">
-        <h3>All Anomalies</h3>
-        <ul id="anomalyList"></ul>
-    </div>
-
-</div>
-
-<div id="toast"></div>
-
-<!-- Modal for Details -->
-<div id="modal" class="modal">
-    <div class="box">
-        <span class="modal-close" onclick="closeModal()">&times;</span>
-        <h3>Event Details</h3>
-        <p><strong>ID:</strong> <span id="d_id"></span></p>
-        <p><strong>Timestamp:</strong> <span id="d_time"></span></p>
-        <p><strong>Severity:</strong> <span id="d_sev"></span></p>
-        <p><strong>Score:</strong> <span id="d_score"></span></p>
-        <p><strong>Prediction:</strong> <span id="d_pred"></span></p>
-        <p><strong>Asset:</strong> <span id="d_asset"></span></p>
-        <p><strong>Reason:</strong> <span id="d_reason"></span></p>
-
-        <h4>Raw Data</h4>
-        <pre id="d_raw" style="background:#111;color:#fff;padding:10px;border-radius:8px;"></pre>
-
-        <div id="assetFilterButton" style="margin-top:12px;"></div>
+    <div class="row-table">
+        <div class="panel">
+            <h3>RAW TELEMETRY <span>[ LATEST 15 ]</span></h3>
+            <div style="overflow:auto;"><table id="rawTable"><thead><tr><th>TIME</th><th>ID</th><th>ASSET</th><th>PROTO</th><th>SVC</th><th>SCORE</th><th>STATUS</th></tr></thead><tbody></tbody></table></div>
+        </div>
     </div>
 </div>
 
-<!-- Modal for Asset Breakdown Pie Click -->
-<div id="assetModal" class="modal">
-    <div class="box">
-        <span class="modal-close" onclick="closeAssetModal()">&times;</span>
-        <h3 id="assetModalTitle"></h3>
-        <p id="assetModalInfo"></p>
-        <div id="assetModalList"></div>
+<div id="detailModal" class="modal-overlay" onclick="closeModal(event)">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal({target:this})">×</span>
+        <h2 style="font-family:'Montserrat'; color:white; margin-top:0; margin-bottom:20px;">EVENT FORENSICS</h2>
+        <div id="modalBody"></div>
     </div>
 </div>
 
 <script>
-/* GLOBAL STATE */
-let mainChart;
-let currentData = [];
-let displayFilter = 'All';
-let mode = 'buffer';
+    // --- FX ---
+    const cvs=document.getElementById('star-canvas'), cx=cvs.getContext('2d'); let w,h,s=[]; const rz=()=>{w=cvs.width=window.innerWidth;h=cvs.height=window.innerHeight}; window.addEventListener('resize',rz); rz();
+    for(let i=0;i<150;i++)s.push({x:Math.random()*w,y:Math.random()*h,v:Math.random()*0.05,sz:Math.random()*1.5});
+    function ani(){ cx.clearRect(0,0,w,h); s.forEach(x=>{x.y-=x.v;if(x.y<0)x.y=h;cx.fillStyle='#FFF';cx.beginPath();cx.arc(x.x,x.y,x.sz,0,Math.PI*2);cx.fill()}); requestAnimationFrame(ani); } ani();
 
-/* TOOLTIP FIX — hide tooltip after click */
-function hideChartTooltip() {
-    if (!mainChart) return;
-    try {
-        mainChart.tooltip.setActiveElements([], { x: 0, y: 0 });
-        mainChart.update();
-    } catch(e){ /* ignore */ }
-}
+    // --- CHARTS ---
+    let charts={}; const cSafe='#CCFF00', cInfo='#00E5FF', cWarn='#FFD600', cCrit='#FF0055', cGrid='#222', cTxt='#888';
+    const conf={responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:cGrid},ticks:{color:cTxt}}, y:{grid:{color:cGrid},ticks:{color:cTxt}}}};
+    
+    // DATA STATE
+    let currentChartData = []; // Holds the data currently on screen for clicking
 
-/* Toast */
-function showToast(msg){
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.display = 'block';
-    setTimeout(()=>{ t.style.display='none'; },4000);
-}
-
-/* Clear all */
-function clearAll(){
-    if (mainChart) {
-        mainChart.data.labels = [];
-        mainChart.data.datasets.forEach(d=>d.data=[]);
-        mainChart.update();
-    }
-    ['overallPie','pieHigh','pieMedium','pieLow','scatter3d'].forEach(id=>{ try{ Plotly.purge(id); } catch(e){} });
-    document.getElementById('anomalyList').innerHTML = '<li style="padding:12px;background:#f2f2f2;border-left:4px solid #aaa;">No data for selected range</li>';
-    document.getElementById('scatterExplanation').textContent='';
-    document.getElementById('totalAnomalies').textContent='0';
-    document.getElementById('maxScore').textContent='0.00';
-    document.getElementById('totalEvents').textContent='0';
-}
-
-/* INIT MAIN CHART */
-function initMainChart(){
-    const ctx = document.getElementById('mainChart').getContext('2d');
-    mainChart = new Chart(ctx,{
-        type:'line',
-        data:{
-            labels:[],
-            datasets:[
-                { label:'Score', data:[], borderColor:'#667eea', backgroundColor:'rgba(102,126,234,0.15)', tension:0.2, fill:true },
-                { label:'Anomaly', type:'scatter', data:[], pointRadius:6, backgroundColor:'#f5576c' }
-            ]
-        },
-        options:{
-            responsive:true,
-            interaction: { mode:'nearest', intersect:true },
-            onClick:(evt)=>{
-                const pts = mainChart.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
-                if(pts && pts.length){
-                    hideChartTooltip();
-                    const p = pts[0];
-                    if(p.datasetIndex===1){
-                        const obj = mainChart.data.datasets[1].data[p.index].ref;
-                        if(obj) openDetailModal(obj);
-                    } else {
-                        const label = mainChart.data.labels[p.index];
-                        const match = currentData.find(a=> new Date(a.timestamp).toLocaleString()===label);
-                        if(match) openDetailModal(match);
+    function init() {
+        // Main Line (Clickable)
+        const ctx=document.getElementById('mainChart').getContext('2d');
+        const grad=ctx.createLinearGradient(0,0,0,400); grad.addColorStop(0,'rgba(204,255,0,0.2)'); grad.addColorStop(1,'rgba(0,0,0,0)');
+        charts.main=new Chart(ctx, {
+            type:'line', 
+            data:{labels:[], datasets:[{data:[], borderColor:cSafe, backgroundColor:grad, fill:true, tension:0.3, borderWidth:2, pointRadius:3, hoverRadius:6}]}, 
+            options:{
+                ...conf,
+                onClick: (e, elements) => {
+                    if(elements.length > 0) {
+                        const index = elements[0].index;
+                        const record = currentChartData[index];
+                        if(record) openModal(record);
                     }
                 }
             }
-        }
-    });
-}
-
-/* LOAD DATA */
-async function loadData(){
-    let url='/api/anomalies';
-    if(mode!=='buffer'){
-        if(mode==='custom'){
-            const s=document.getElementById('startDT').value;
-            const e=document.getElementById('endDT').value;
-            if(!s||!e){ alert('Pick start & end'); return; }
-            url=`/api/anomalies/history?start=${encodeURIComponent(s)}&end=${encodeURIComponent(e)}`;
-        } else {
-            url=`/api/anomalies/history?range=${mode}`;
-        }
-    }
-
-    try{
-        const res = await fetch(url);
-        const json = await res.json();
-        const data = json.anomalies || [];
-        if(!data.length){ clearAll(); return; }
-        currentData = data;
-        updateCharts(data);
-    } catch(err){
-        console.error(err);
-        showToast('Connection error');
-        clearAll();
-    }
-}
-
-/* UPDATE CHARTS */
-function updateCharts(data){
-    document.getElementById('totalAnomalies').textContent = data.filter(a=>a.is_anomaly).length;
-    document.getElementById('maxScore').textContent = Math.max(...data.map(a=>a.anomaly_score||0)).toFixed(4);
-    document.getElementById('totalEvents').textContent = data.length;
-
-    const labels = data.map(a=> new Date(a.timestamp).toLocaleString());
-    const scores = data.map(a=> a.value);
-    const pts = data.filter(a=>a.is_anomaly).map(a=>({ x:new Date(a.timestamp).toLocaleString(), y:a.value, ref:a }));
-
-    mainChart.data.labels = labels;
-    mainChart.data.datasets[0].data = scores;
-    mainChart.data.datasets[1].data = pts;
-    mainChart.update();
-
-    renderAnomalyList();
-    renderOverallPie(data);
-    renderDetailedPies(data);
-    renderScatter(data);
-}
-
-/* ANOMALY LIST */
-function renderAnomalyList(assetFilter=null){
-    const ul = document.getElementById('anomalyList');
-    ul.innerHTML='';
-    let arr = [...currentData];
-    if(displayFilter!=='All') arr = arr.filter(a=>a.severity===displayFilter);
-    if(assetFilter) arr = arr.filter(a=>a.asset_id===assetFilter);
-
-    if(!arr.length){
-        ul.innerHTML = '<li style="padding:12px;background:#eee;">No anomalies in this filter</li>';
-        return;
-    }
-
-    arr.slice().reverse().forEach(a=>{
-        const li=document.createElement('li');
-        li.innerHTML = `<div style="display:flex;justify-content:space-between;"><div><strong>ID:</strong> ${a.id}</div><div><span class="sev ${a.severity}">${a.severity}</span></div></div>
-                        <div><small>${new Date(a.timestamp).toLocaleString()}</small></div>
-                        <div style="margin-top:6px;"><strong>Score:</strong> ${a.anomaly_score.toFixed(6)} • <strong>Asset:</strong> ${a.asset_id}</div>
-                        <div style="color:#666;margin-top:6px;">${a.reason}</div>`;
-        li.onclick = ()=> openDetailModal(a);
-        ul.appendChild(li);
-    });
-}
-
-/* FILTER LIST */
-function filterList(sev){
-    displayFilter = sev;
-    renderAnomalyList();
-}
-
-/* OVERALL PIE */
-function renderOverallPie(data){
-    const counts={High:0,Medium:0,Low:0};
-    data.forEach(a=> counts[a.severity] = (counts[a.severity]||0)+1);
-    Plotly.newPlot('overallPie',[{ labels:['High','Medium','Low'], values:[counts.High,counts.Medium,counts.Low], type:'pie', hole:0.25, textinfo:'label+value+percent' }],
-        {margin:{t:10,b:10,l:10,r:10},height:310},{displayModeBar:false}).then(gd=>{
-            gd.on('plotly_click', ev=>{
-                const label = ev.points[0].label;
-                filterList(label);
-            });
         });
-}
 
-/* DETAILED PIE CHARTS (ASSET BREAKDOWN) */
-function renderDetailedPies(data){
-    const groups={High:[],Medium:[],Low:[]};
-    data.forEach(a=> groups[a.severity].push(a));
+        charts.pie=new Chart(document.getElementById('pieMain'), {type:'doughnut', data:{labels:['High','Med','Low','Safe'], datasets:[{data:[0,0,0,0], backgroundColor:[cCrit,cWarn,cInfo,cSafe], borderWidth:0}]}, options:{...conf, cutout:'70%'}});
 
-    function draw(id, arr){
-        const counts={};
-        arr.forEach(a=> counts[a.asset_id] = (counts[a.asset_id]||0)+1);
-        const labels = Object.keys(counts);
-        const values = labels.map(l=>counts[l]);
-        if(labels.length===0){
-            document.getElementById(id).innerHTML = '<div style="padding:12px;color:#666;">No data</div>';
-            return;
-        }
-        Plotly.newPlot(id,[{ labels, values, type:'pie', hole:0.35, textinfo:'label+percent' }],{height:260, margin:{t:10,b:10}}, {displayModeBar:false}).then(gd=>{
-            gd.on('plotly_click', ev=>{
-                const asset = ev.points[0].label;
-                const severity = (id==='pieHigh')?'High':(id==='pieMedium')?'Medium':'Low';
-                openAssetModal(severity, asset, arr);
-            });
+        const legOpts = { responsive:true, maintainAspectRatio:false, layout:{padding:10}, plugins: { legend: { display:true, position:'right', labels:{color:'#888', boxWidth:10, font:{size:9, family:'JetBrains Mono'}} } } };
+        ['High','Med','Low'].forEach(k=>{
+            charts['pie'+k]=new Chart(document.getElementById('pie'+k), {type:'pie', data:{labels:[], datasets:[{data:[], backgroundColor:[cCrit,cWarn,cInfo,cSafe,'#FFF'], borderWidth:0}]}, options:legOpts});
+        });
+
+        // Radar Chart
+        charts.radar = new Chart(document.getElementById('radarChart').getContext('2d'), {
+            type: 'radar',
+            data: { labels:['HTTP','SMTP','SSH','DNS','FTP'], datasets:[{label:'Targeted', data:[0,0,0,0,0], backgroundColor:'rgba(0,229,255,0.2)', borderColor:cInfo, borderWidth:2, pointBackgroundColor:cInfo}] },
+            options: {
+                responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                scales: { r: { angleLines: { color: '#333' }, grid: { color: '#333' }, pointLabels: { color: cTxt, font: { size: 11, family: 'JetBrains Mono' } }, ticks: { backdropColor: 'transparent', color: cInfo, display: true, font: { size: 9 } }, suggestedMin: 0 } }
+            }
         });
     }
 
-    draw('pieHigh', groups.High);
-    draw('pieMedium', groups.Medium);
-    draw('pieLow', groups.Low);
-}
+    // --- MODAL LOGIC ---
+    function openModal(rec) {
+        const modal = document.getElementById('detailModal');
+        const body = document.getElementById('modalBody');
+        
+        let rawPretty = rec.raw_data;
+        try { rawPretty = JSON.stringify(JSON.parse(rec.raw_data), null, 2); } catch(e){}
 
-/* ASSET MODAL */
-function openAssetModal(severity, asset, arr){
-    const modal = document.getElementById('assetModal');
-    modal.style.display='block';
-    document.getElementById('assetModalTitle').textContent = `${severity} — Asset: ${asset}`;
-    const filtered = arr.filter(a=> a.asset_id===asset);
-    document.getElementById('assetModalInfo').innerHTML = `Total events: <b>${filtered.length}</b>`;
-    const listDiv = document.getElementById('assetModalList');
-    listDiv.innerHTML = filtered.slice(0,12).map(a=>`<div style="padding:8px;border-bottom:1px solid #eee;"><b>ID:</b> ${a.id} • <b>Score:</b> ${a.anomaly_score.toFixed(6)} • <b>Time:</b> ${new Date(a.timestamp).toLocaleString()}</div>`).join('');
-    listDiv.innerHTML += `<div style="margin-top:12px;"><button class="btn" onclick="applyAssetFilter('${asset}')">Filter by this Asset</button></div>`;
-}
-function closeAssetModal(){ document.getElementById('assetModal').style.display='none'; }
-function applyAssetFilter(asset){ closeAssetModal(); renderAnomalyList(asset); filterList('All'); }
+        const col = rec.severity==='High'?cCrit:(rec.severity==='Medium'?cWarn:(rec.severity==='Safe'?cSafe:cInfo));
 
-/* SCATTER */
-function renderScatter(data){
-    const x=[], y=[], z=[], text=[];
-    data.forEach(a=>{
-        x.push(a.anomaly_score);
-        y.push(a.value);
-        z.push(new Date(a.timestamp).getTime());
-        text.push(`ID:${a.id}<br>${a.severity}<br>${new Date(a.timestamp).toLocaleString()}`);
-    });
-    Plotly.newPlot('scatter3d',[{ x,y,z,text,mode:'markers', marker:{size:5,color:x,colorscale:'Viridis'}, type:'scatter3d' }],{height:420, margin:{t:10}, scene:{ xaxis:{title:'Score'}, yaxis:{title:'Value'}, zaxis:{title:'Time'} }},{displayModeBar:false});
-    const max = Math.max(...data.map(d=>d.anomaly_score||0)).toFixed(4);
-    const min = Math.min(...data.map(d=>d.anomaly_score||0)).toFixed(4);
-    const high = data.filter(d=>d.severity==='High').length;
-    document.getElementById('scatterExplanation').textContent = `Total: ${data.length} • High: ${high} • Score range: ${min} — ${max}`;
-}
-
-/* DETAIL MODAL */
-function openDetailModal(a){
-    document.getElementById('d_id').textContent = a.id;
-    document.getElementById('d_time').textContent = a.timestamp;
-    document.getElementById('d_sev').textContent = a.severity;
-    document.getElementById('d_score').textContent = a.anomaly_score.toFixed(6);
-    document.getElementById('d_pred').textContent = a.prediction;
-    document.getElementById('d_asset').textContent = a.asset_id;
-    document.getElementById('d_reason').textContent = a.reason;
-    try { document.getElementById('d_raw').textContent = JSON.stringify(JSON.parse(a.raw_data), null, 2); } catch { document.getElementById('d_raw').textContent = a.raw_data; }
-    document.getElementById('assetFilterButton').innerHTML = `<button class="btn" onclick="applyAssetFilter('${a.asset_id}')">Filter by Asset: ${a.asset_id}</button>`;
-    document.getElementById('modal').style.display = 'block';
-}
-function closeModal(){ document.getElementById('modal').style.display='none'; }
-
-/* TIME CONTROLS */
-function setRange(r,btn){
-    mode=r;
-    document.querySelectorAll('.controls .btn').forEach(b=>b.classList.remove('active'));
-    if(btn) btn.classList.add('active');
-    loadData();
-}
-function applyCustom(){ mode='custom'; loadData(); }
-
-/* LOAD */
-async function loadData(){
-    let url='/api/anomalies';
-    if(mode!=='buffer'){
-        if(mode==='custom'){
-            const s=document.getElementById('startDT').value; const e=document.getElementById('endDT').value;
-            if(!s||!e){ alert('Pick start & end datetimes'); return; }
-            if(new Date(s) >= new Date(e)){ alert('Start must be before End'); return; }
-            url=`/api/anomalies/history?start=${encodeURIComponent(s)}&end=${encodeURIComponent(e)}`;
-        } else url=`/api/anomalies/history?range=${mode}`;
+        body.innerHTML = `
+            <div class="detail-row"><span class="detail-label">EVENT ID</span> <span class="detail-val">${rec.id}</span></div>
+            <div class="detail-row"><span class="detail-label">TIMESTAMP</span> <span class="detail-val">${rec.timestamp}</span></div>
+            <div class="detail-row"><span class="detail-label">ASSET ID</span> <span class="detail-val" style="color:${cInfo}">${rec.asset_id}</span></div>
+            <div class="detail-row"><span class="detail-label">SEVERITY</span> <span class="detail-val" style="color:${col}; font-weight:bold;">${rec.severity}</span></div>
+            <div class="detail-row"><span class="detail-label">ANOMALY SCORE</span> <span class="detail-val">${rec.anomaly_score.toFixed(6)}</span></div>
+            <div class="detail-row"><span class="detail-label">PREDICTION</span> <span class="detail-val">${rec.prediction}</span></div>
+            <pre>${rawPretty}</pre>
+        `;
+        modal.style.display = 'flex';
     }
-    try{
-        const res = await fetch(url);
-        const json = await res.json();
-        const data = json.anomalies || [];
-        if(!data.length){ clearAll(); return; }
-        currentData = data;
-        updateCharts(data);
-    } catch(err){ console.error(err); showToast('Connection error'); clearAll(); }
-}
 
-/* KEY + OUTSIDE CLICK CLOSE */
-document.addEventListener('keydown',(e)=>{ if(e.key==='Escape'){ closeModal(); closeAssetModal(); } });
-window.addEventListener('click',(ev)=>{
-    const modal = document.getElementById('modal');
-    const assetModal = document.getElementById('assetModal');
-    if(ev.target===modal) closeModal();
-    if(ev.target===assetModal) closeAssetModal();
-});
+    window.closeModal = function(e) {
+        if (e.target.id === 'detailModal' || e.target.className === 'modal-close') {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+    }
 
-/* START */
-document.addEventListener('DOMContentLoaded',()=>{ initMainChart(); loadData(); setInterval(()=>{ if(mode==='buffer') loadData(); },3000); });
+    // --- MAIN LOGIC ---
+    let mode='buffer';
+    
+    setInterval(async ()=>{
+        const [resStats, resLat] = await Promise.all([fetch('/api/stats'), fetch('/api/latest')]);
+        const stats = await resStats.json();
+        const lat = await resLat.json();
+
+        document.getElementById('val-db-total').innerText = stats.db_total;
+
+        if(lat.id) {
+            document.getElementById('hud-raw').innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><b class="hud-label">STREAM:</b> ${lat.raw_data}</span>`;
+            const col = lat.severity==='High'?cCrit:(lat.severity==='Medium'?cWarn:(lat.severity==='Safe'?cSafe:cInfo));
+            document.getElementById('hud-pred').innerHTML = `<span><b class="hud-label">ID:</b> ${lat.id}</span><span><b class="hud-label">ASSET:</b> ${lat.asset_id}</span><span><b class="hud-label">MSE:</b> ${lat.anomaly_score.toFixed(5)}</span><span style="color:${col}">${lat.severity}</span>`;
+            document.getElementById('hud-pred').style.borderLeftColor = col;
+        }
+    }, 1000);
+
+    async function fetchData() {
+        const smp = document.getElementById('sampleToggle').checked ? 200 : 0;
+        let url = mode==='buffer' ? '/api/anomalies' : `/api/anomalies/history?range=${mode}&sample=${smp}`;
+        try {
+            const res = await fetch(url);
+            const json = await res.json();
+            updateUI(json.anomalies||[], json.view_stats||null);
+        } catch(e){ console.error(e); }
+    }
+
+    function updateUI(data, vStats) {
+        // Save for Click Handler
+        currentChartData = data;
+
+        if(!data.length && mode!=='buffer') return;
+
+        let total = data.length;
+        let anoms = data.filter(d=>d.is_anomaly).length;
+        let maxS = Math.max(...data.map(d=>d.anomaly_score||0));
+
+        if(mode!=='buffer' && vStats) {
+            total = vStats.total; anoms = vStats.anomalies; maxS = vStats.max_score;
+        }
+
+        document.getElementById('val-view-total').innerText = total;
+        document.getElementById('val-anom').innerText = anoms;
+        document.getElementById('val-score').innerText = maxS.toFixed(4);
+        const health = total>0 ? (100 - (anoms/total)*100) : 100;
+        document.getElementById('val-health').innerText = Math.max(0, health).toFixed(1)+'%';
+        document.getElementById('val-health').style.color = health>90?cSafe:(health>60?cWarn:cCrit);
+
+        charts.main.data.labels = data.map(d=>d.timestamp.split('T')[1]);
+        charts.main.data.datasets[0].data = data.map(d=>d.value);
+        charts.main.update();
+
+        const h=data.filter(d=>d.severity==='High'), m=data.filter(d=>d.severity==='Medium'), l=data.filter(d=>d.severity==='Low'), s=data.filter(d=>d.severity==='Safe');
+        charts.pie.data.datasets[0].data = [h.length, m.length, l.length, s.length];
+        charts.pie.update();
+
+        updAP(charts.pieHigh, h); updAP(charts.pieMed, m); updAP(charts.pieLow, l);
+
+        // RADAR
+        const svcs={}; 
+        data.forEach(d=>{ try{ const j=JSON.parse(d.raw_data); const k=j.service||j.proto||'unk'; svcs[k]=(svcs[k]||0)+1; }catch(e){} });
+        const sSvcs = Object.entries(svcs).sort((a,b)=>b[1]-a[1]).slice(0,5);
+        if(sSvcs.length > 0) {
+            charts.radar.data.labels = sSvcs.map(x=>x[0].toUpperCase());
+            charts.radar.data.datasets[0].data = sSvcs.map(x=>x[1]);
+            charts.radar.update();
+        }
+
+        const trace={x:data.map(d=>d.anomaly_score), y:data.map(d=>d.value), z:data.map(d=>new Date(d.timestamp).getTime()), mode:'markers', marker:{size:3, color:data.map(d=>d.anomaly_score), colorscale:'Viridis'}, type:'scatter3d'};
+        Plotly.react('scatter3d', [trace], {margin:{l:0,r:0,b:0,t:0}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', scene:{xaxis:{title:'S',color:'#666'}, yaxis:{title:'V',color:'#666'}, zaxis:{title:'T',color:'#666'}}}, {displayModeBar:false});
+
+        const tb=document.querySelector('#rawTable tbody'); tb.innerHTML='';
+        data.slice(-15).reverse().forEach(r=>{
+            let p='-', s='-'; try{const j=JSON.parse(r.raw_data); p=j.proto; s=j.service;}catch(e){}
+            tb.innerHTML+=`<tr><td style="color:#666">${r.timestamp.split('T')[1]}</td><td>${r.id}</td><td style="color:${cInfo}">${r.asset_id}</td><td>${p}</td><td>${s}</td><td>${r.anomaly_score.toFixed(4)}</td><td><span class="badge b-${r.severity}">${r.severity}</span></td></tr>`;
+        });
+    }
+
+    function updAP(c,d){
+        const cnt={}; d.forEach(x=>cnt[x.asset_id]=(cnt[x.asset_id]||0)+1);
+        const s=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,5);
+        c.data.labels=s.map(x=>x[0]); c.data.datasets[0].data=s.map(x=>x[1]); c.update();
+    }
+
+    window.setMode=m=>{ mode=m; document.querySelectorAll('.controls button').forEach(b=>b.classList.remove('active')); event.target.classList.add('active'); fetchData(); };
+    init(); fetchData(); setInterval(()=>{ if(mode==='buffer') fetchData(); }, 2000);
+
 </script>
-
 </body>
 </html>

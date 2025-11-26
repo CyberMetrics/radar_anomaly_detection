@@ -12,7 +12,7 @@ venv/
 *.keras
 *.joblib
 anomaly_threshold.txt
-KDD*.txt  # Datasets are large; host them elsewhere if needed
+# Datasets are large; host them elsewhere if needed
 
 # Logs
 *.log
