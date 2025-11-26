@@ -24,7 +24,7 @@ To run R.A.D.A.R locally, your system needs:
 | Component | Requirement |
 |-----------|-------------|
 | **OS** | Windows 10/11, macOS, or Linux |
-| **Python** | Version 3.12 or higher (Check via `python --version`) |
+| **Python** | Version 3.11 or higher (Check via `python --version`) |
 | **Database** | PostgreSQL 14 or higher |
 | **RAM** | Minimum 4GB (8GB recommended for smooth 3D rendering) |
 | **Browser** | Chrome, Edge, or Firefox (with WebGL enabled) |
