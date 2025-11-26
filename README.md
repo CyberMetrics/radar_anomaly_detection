@@ -39,7 +39,7 @@ Follow these steps to set up the environment from scratch.
 
 Open your terminal (Command Prompt, PowerShell, or Bash) and run:
 ```bash
-git clone <YOUR_REPO_URL_HERE>
+git clone https://github.com/CyberMetrics/radar_anomaly_detection.git
 cd radar_anomaly_detection
 ```
 
