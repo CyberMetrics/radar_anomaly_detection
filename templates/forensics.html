@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>R.A.D.A.R | FORENSICS</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@500;800;900&display=swap" rel="stylesheet">
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+    <style>
+        :root {
+            --bg-core: #050505;
+            --bg-panel: rgba(12, 12, 12, 0.95); 
+            --border-panel: rgba(255, 255, 255, 0.15);
+            --text-main: #F5F5F5;
+            --text-dim: #888;
+            
+            /* CYBER PALETTE */
+            --c-safe: #CCFF00;
+            --c-info: #00E5FF;
+            --c-warn: #FFD600;
+            --c-crit: #FF0055;
+        }
+
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg-core); font-family: 'JetBrains Mono'; color: var(--text-main); overflow: hidden; }
+
+        /* BACKGROUNDS */
+        #star-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        .bg-grid { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 40px 40px; }
+
+        /* LAYOUT */
+        #app-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr 380px; 
+            grid-template-rows: 70px 1fr;
+            height: 100vh; width: 100vw;
+            position: relative; z-index: 10;
+        }
+
+        /* HEADER */
+        header {
+            grid-column: 1 / -1;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 30px; background: rgba(5,5,5,0.9);
+            border-bottom: 1px solid var(--border-panel);
+            z-index: 20;
+        }
+        .brand { font-family: 'Montserrat'; font-weight: 900; font-size: 1.2rem; letter-spacing: -1px; color: white; text-decoration: none; }
+        .brand span { color: var(--c-crit); } 
+        .mode-badge { background: rgba(255, 0, 85, 0.1); border: 1px solid var(--c-crit); color: var(--c-crit); padding: 6px 16px; font-size: 0.75rem; font-weight: 700; border-radius: 4px; letter-spacing: 1px; }
+
+        /* PANELS */
+        .sidebar-left { grid-column: 1; border-right: 1px solid var(--border-panel); background: var(--bg-panel); display: flex; flex-direction: column; overflow: hidden; }
+        .main-stage { grid-column: 2; position: relative; background: rgba(0,0,0,0.3); overflow: hidden; }
+        .sidebar-right { grid-column: 3; border-left: 1px solid var(--border-panel); background: var(--bg-panel); display: flex; flex-direction: column; overflow: hidden; }
+
+        /* QUEUE */
+        .queue-header { padding: 20px; border-bottom: 1px solid var(--border-panel); font-family: 'Montserrat'; font-weight: 700; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; }
+        .queue-list { flex: 1; overflow-y: auto; }
+        
+        .queue-item {
+            padding: 15px 20px; border-bottom: 1px solid #222; cursor: pointer; transition: 0.2s;
+            border-left: 3px solid transparent; /* Base border */
+        }
+        .queue-item:hover { background: rgba(255,255,255,0.03); }
+        .queue-item.active { background: rgba(255,255,255,0.05); }
+        
+        /* SEVERITY COLORS for LIST */
+        .q-sev-High { border-left-color: var(--c-crit) !important; }
+        .q-sev-Medium { border-left-color: var(--c-warn) !important; }
+        .q-sev-Low { border-left-color: var(--c-info) !important; }
+
+        .q-top { display: flex; justify-content: space-between; color: #666; font-size: 0.7rem; }
+        .q-asset { font-weight: 700; color: var(--text-main); font-size: 0.9rem; margin-top: 4px; }
+        .q-score { font-size: 0.7rem; color: #888; margin-top: 2px; }
+
+        /* GRAPH */
+        #network-graph { width: 100%; height: 100%; outline: none; }
+        .graph-overlay { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.8); border: 1px solid var(--border-panel); padding: 15px; pointer-events: none; border-radius: 4px; }
+        .graph-stat { font-size: 0.75rem; color: var(--c-info); margin-bottom: 6px; font-weight: 700; }
+
+        /* TIMELINE */
+        .section-header { padding: 15px 20px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-panel); border-top: 1px solid var(--border-panel); font-family: 'Montserrat'; font-weight: 700; font-size: 0.8rem; color: var(--text-dim); letter-spacing: 1px; }
+        .section-header:first-child { border-top: none; }
+        .timeline-box { flex: 1; overflow-y: auto; padding: 20px; }
+        .timeline-item { position: relative; padding-left: 25px; margin-bottom: 20px; border-left: 1px solid #333; }
+        .timeline-item::before { content: ''; position: absolute; left: -4px; top: 0; width: 7px; height: 7px; background: var(--bg-core); border: 1px solid var(--c-info); border-radius: 50%; }
+        .tl-time { font-size: 0.7rem; color: var(--c-info); margin-bottom: 4px; font-weight: 700; }
+        .tl-msg { font-size: 0.8rem; line-height: 1.4; color: #ccc; }
+
+        /* CONSOLE */
+        .console-box { height: 300px; display: flex; flex-direction: column; background: #080808; border-top: 1px solid var(--c-safe); }
+        .console-output { flex: 1; padding: 15px; overflow-y: auto; font-size: 0.75rem; color: #aaa; font-family: 'JetBrains Mono'; }
+        .console-input-area { display: flex; border-top: 1px solid #333; background: #111; flex-shrink: 0; }
+        .console-prompt { padding: 10px 15px; color: var(--c-safe); font-weight: 700; font-size: 0.8rem; }
+        .console-input { flex: 1; background: transparent; border: none; color: white; font-family: 'JetBrains Mono'; outline: none; padding: 10px; }
+
+        /* ACTIONS */
+        .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border-panel); border-bottom: 1px solid var(--border-panel); }
+        .action-btn { background: var(--bg-panel); border: none; padding: 15px; color: var(--text-dim); font-family: 'JetBrains Mono'; font-size: 0.7rem; cursor: pointer; transition: 0.2s; font-weight: 700; }
+        .action-btn:hover { background: #222; color: white; }
+        .btn-crit:hover { color: var(--c-crit); background: rgba(255,0,85,0.15); }
+
+    </style>
+</head>
+<body>
+
+<canvas id="star-canvas"></canvas>
+<div class="bg-grid"></div>
+
+<div id="app-layout">
+    <header>
+        <div class="brand">
+            <a href="/dashboard" style="color:inherit; text-decoration:none; margin-right:20px;">&lt; DASHBOARD</a>
+            R.A.D.A.R <span>//</span> FORENSICS
+        </div>
+        <div class="mode-badge">INCIDENT RESPONSE MODE</div>
+    </header>
+
+    <aside class="sidebar-left">
+        <div class="queue-header">
+            <span>ACTIVE THREATS</span>
+            <span id="q-count" style="color:var(--c-crit)">0</span>
+        </div>
+        <div class="queue-list" id="incident-list">
+            <div style="padding:20px; text-align:center; color:#666; font-size:0.8rem;">SCANNING NETWORK...</div>
+        </div>
+    </aside>
+
+    <section class="main-stage">
+        <div id="network-graph"></div>
+        <div class="graph-overlay">
+            <div class="graph-stat">TOPOLOGY: MESH</div>
+            <div class="graph-stat">NODES: <span id="node-count">5</span> ACTIVE</div>
+            <div class="graph-stat" style="color:var(--c-crit)">COMPROMISED: <span id="comp-count">0</span></div>
+        </div>
+    </section>
+
+    <aside class="sidebar-right">
+        <div class="section-header">ATTACK VECTOR TIMELINE</div>
+        <div class="timeline-box" id="timeline">
+            <div class="timeline-item">
+                <div class="tl-time" style="color:white">SYSTEM READY</div>
+                <div class="tl-msg">Forensics module initialized. Select a threat to begin.</div>
+            </div>
+        </div>
+
+        <div class="section-header">RESPONSE ACTIONS</div>
+        <div class="actions-grid">
+            <button class="action-btn btn-crit" onclick="runCommand('isolate')">[ ISOLATE ]</button>
+            <button class="action-btn" onclick="runCommand('trace')">[ TRACE ]</button>
+            <button class="action-btn" onclick="runCommand('pcap')">[ DUMP PCAP ]</button>
+            <button class="action-btn" onclick="runCommand('block')">[ BLOCK IP ]</button>
+        </div>
+
+        <div class="console-box">
+            <div class="console-output" id="console-out">
+                <div>R.A.D.A.R SEC-OPS TERMINAL v2.4</div>
+                <div>Connected to Neural Engine.</div>
+                <br>
+            </div>
+            <div class="console-input-area">
+                <div class="console-prompt">root@radar:~#</div>
+                <input type="text" class="console-input" id="cli-input" autocomplete="off">
+            </div>
+        </div>
+    </aside>
+</div>
+
+<script>
+    // --- 1. BACKGROUND ---
+    const cvs=document.getElementById('star-canvas'), cx=cvs.getContext('2d'); let w,h,s=[]; const rz=()=>{w=cvs.width=window.innerWidth;h=cvs.height=window.innerHeight}; window.addEventListener('resize',rz); rz();
+    for(let i=0;i<100;i++)s.push({x:Math.random()*w,y:Math.random()*h,v:Math.random()*0.05,sz:Math.random()*1.5});
+    function ani(){ cx.clearRect(0,0,w,h); s.forEach(x=>{x.y-=x.v;if(x.y<0)x.y=h;cx.fillStyle='#FFF';cx.beginPath();cx.arc(x.x,x.y,x.sz,0,Math.PI*2);cx.fill()}); requestAnimationFrame(ani); } ani();
+
+    // --- 2. GRAPH STATE ---
+    let nodes = new vis.DataSet([
+        {id: 1, label: 'GATEWAY', shape: 'hexagon', color: {background:'#00E5FF', border:'#00E5FF'}, font:{color:'white'}},
+        {id: 2, label: 'FW-01', shape: 'dot', color: '#CCFF00', font:{color:'white'}},
+        {id: 3, label: 'DB-MAIN', shape: 'database', color: '#CCFF00', font:{color:'white'}},
+        {id: 4, label: 'WEB-01', shape: 'dot', color: '#CCFF00', font:{color:'white'}},
+        {id: 5, label: 'AUTH-SVR', shape: 'dot', color: '#CCFF00', font:{color:'white'}},
+        {id: 99, label: 'TARGET', shape: 'dot', color: '#FF0055', size: 25, shadow:{enabled:true, color:'#FF0055', size:20}}
+    ]);
+    
+    let edges = new vis.DataSet([
+        {id: 'e1', from: 1, to: 2, color: '#444'}, {id: 'e2', from: 2, to: 3, color: '#444'}, 
+        {id: 'e3', from: 2, to: 4, color: '#444'}, {id: 'e4', from: 4, to: 5, color: '#444'},
+        {id: 'attack-link', from: 1, to: 99, color:{color:'#FF0055'}, width:2}
+    ]);
+
+    let network;
+
+    function initGraph() {
+        const container = document.getElementById('network-graph');
+        const data = { nodes: nodes, edges: edges };
+        const options = {
+            nodes: { borderWidth: 2, shadow:true, font:{face:'JetBrains Mono'} },
+            edges: { width: 1, smooth: { type: 'continuous' } },
+            physics: { stabilization: true, barnesHut: { gravitationalConstant: -4000 } },
+            interaction: { hover: true }
+        };
+        network = new vis.Network(container, data, options);
+    }
+
+    // --- 3. INCIDENTS ---
+    async function loadIncidents() {
+        try {
+            // Fetch all to ensure we catch severity
+            const res = await fetch('/api/anomalies/history?range=today&sample=50');
+            const json = await res.json();
+            const allIncidents = json.anomalies.filter(a => a.is_anomaly); // All threats
+            
+            const list = document.getElementById('incident-list');
+            
+            if(list.childElementCount !== allIncidents.length && allIncidents.length > 0) {
+                list.innerHTML = ''; 
+                document.getElementById('q-count').innerText = allIncidents.length;
+
+                allIncidents.forEach(inc => {
+                    const el = document.createElement('div');
+                    // --- COLOR FIX: Add class based on severity ---
+                    el.className = `queue-item q-sev-${inc.severity}`;
+                    el.innerHTML = `
+                        <div class="q-top"><span>${inc.timestamp.split('T')[1]}</span> <span>ID: ${inc.id}</span></div>
+                        <div class="q-asset">${inc.asset_id}</div>
+                        <div class="q-score" style="display:flex; justify-content:space-between;">
+                            <span>MSE: ${inc.anomaly_score.toFixed(4)}</span>
+                            <span style="color:${inc.severity==='High'?'#FF0055':(inc.severity==='Medium'?'#FFD600':'#00E5FF')}">${inc.severity}</span>
+                        </div>
+                    `;
+                    el.onclick = () => selectIncident(inc, el);
+                    list.appendChild(el);
+                });
+            }
+        } catch(e) { console.log("Polling..."); }
+    }
+
+    function selectIncident(inc, el) {
+        document.querySelectorAll('.queue-item').forEach(i => i.classList.remove('active'));
+        el.classList.add('active');
+        
+        // --- GRAPH RESET LOGIC ---
+        // 1. Reset Node Style (In case it was blocked)
+        nodes.update({
+            id: 99, 
+            label: inc.asset_id,
+            shape: 'dot', 
+            color: '#FF0055', // Reset to Red
+            font: {color: 'white'}
+        });
+
+        // 2. Reset Edge (In case it was isolated/deleted)
+        if(!edges.get('attack-link')) {
+            // Add it back if missing
+            edges.add({id: 'attack-link', from: 1, to: 99, color:{color:'#FF0055'}, width:2, dashes: false});
+        } else {
+            // Or reset its style if it was just hidden/greyed
+            edges.update({id: 'attack-link', color:{color:'#FF0055'}, width:2, dashes: false});
+        }
+
+        document.getElementById('comp-count').innerText = "1";
+        addTimeline(`TARGET LOCKED: ${inc.asset_id}`, '#CCFF00');
+        logConsole(`Context switched to ${inc.asset_id}`);
+    }
+
+    // --- 4. UTILS ---
+    function addTimeline(msg, col='var(--c-info)') {
+        const box = document.getElementById('timeline');
+        const time = new Date().toLocaleTimeString();
+        const isAtBottom = box.scrollHeight - box.scrollTop <= box.clientHeight + 50;
+        box.innerHTML += `<div class="timeline-item"><div class="tl-time" style="color:${col}">${time}</div><div class="tl-msg">${msg}</div></div>`;
+        if(isAtBottom) box.scrollTop = box.scrollHeight;
+    }
+
+    function logConsole(msg, style='color:#ccc') {
+        const term = document.getElementById('console-out');
+        term.innerHTML += `<div style="${style}">> ${msg}</div>`;
+        setTimeout(() => { term.scrollTop = term.scrollHeight; }, 10);
+    }
+
+    function runCommand(cmd) {
+        logConsole(`EXEC: ${cmd.toUpperCase()}`, 'color:#CCFF00');
+        setTimeout(() => {
+            if(cmd === 'isolate') {
+                // Visually Cut Connection
+                if(edges.get('attack-link')) {
+                    edges.remove('attack-link');
+                    nodes.update({id: 99, color: {background:'#333', border:'#555'}, label: 'ISOLATED'});
+                    addTimeline('HOST PHYSICALLY ISOLATED', 'var(--c-crit)');
+                    logConsole('Link terminated.');
+                } else {
+                    logConsole('Host already isolated.', 'color:#888');
+                }
+            } 
+            else if(cmd === 'block') {
+                // Visually Lock Node
+                nodes.update({id: 99, shape: 'box', label: 'BLOCKED', color: '#FF0000'});
+                addTimeline('IP BLACKLISTED', 'var(--c-crit)');
+                logConsole('Firewall rule added.');
+            }
+            else if(cmd === 'trace') {
+                logConsole('Tracing route...');
+                const path=['e1','e3','e4']; let step=0;
+                const int = setInterval(()=>{
+                    if(step>0) edges.update({id:path[step-1], color:'#444', width:1});
+                    if(step<path.length) { edges.update({id:path[step], color:'#00E5FF', width:4}); step++; }
+                    else { clearInterval(int); logConsole("Trace Complete."); }
+                }, 400);
+            }
+            else if(cmd === 'pcap') {
+                addTimeline('PACKET CAPTURE SAVED', 'var(--c-safe)');
+                logConsole('Dump saved to /var/log/evidence.pcap');
+            }
+        }, 500);
+    }
+
+    document.getElementById('cli-input').addEventListener('keypress', (e) => {
+        if(e.key === 'Enter') { runCommand(e.target.value); e.target.value = ''; }
+    });
+
+    setTimeout(initGraph, 500);
+    loadIncidents();
+    setInterval(loadIncidents, 5000);
+
+</script>
+</body>
+</html>
