@@ -170,6 +170,10 @@ def forensics(): return render_template("forensics.html")
 @app.route("/neural")
 def neural(): return render_template("neural.html")
 
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
 @app.route("/api/vitals")
 def vitals():
     # Get Real CPU & RAM

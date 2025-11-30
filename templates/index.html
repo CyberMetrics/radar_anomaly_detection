@@ -443,9 +443,12 @@
     }
 
     @keyframes blink {
-      0%, 100% {
+
+      0%,
+      100% {
         opacity: 1;
       }
+
       50% {
         opacity: 0.3;
       }
@@ -479,6 +482,7 @@
         grid-template-columns: 1fr;
         grid-template-rows: auto;
       }
+
       .bento-card.large {
         grid-column: span 1;
       }
@@ -524,9 +528,10 @@
           The Next Evolution of SIEM.
         </p>
 
-        <a href="/dashboard" class="action-btn animate-fade">
-          [ Launch Dashboard ]
-        </a>
+        <button class="action-btn animate-fade" onclick="window.location.href='/templates/dashboard.html'">
+          Launch Dashboard
+        </button>
+
       </div>
     </section>
 
@@ -575,7 +580,7 @@
             <div style="flex:1">
               <h3>PREDICTIVE AI</h3>
               <p>Neural networks that predict attack vectors 40 minutes before execution.</p>
-              <a href="/neural" class="neural-link">[ CONFIGURE MODEL]</a>
+              <a href="/templates/neural.html" class="neural-link">[ CONFIGURE MODEL]</a>
             </div>
           </div>
           <div class="bento-card animate-up">

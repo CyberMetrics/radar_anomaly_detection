@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,246 +8,567 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@500;800;900&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@500;800;900&display=swap"
+        rel="stylesheet">
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
     <style>
         :root {
             --bg-core: #050505;
-            --bg-panel: rgba(12, 12, 12, 0.85); 
+            --bg-panel: rgba(12, 12, 12, 0.85);
             --border-panel: rgba(255, 255, 255, 0.12);
             --text-main: #F5F5F5;
             --text-dim: #888;
-            
+
             /* CYBER PALETTE */
-            --c-safe: #CCFF00;  /* Lime */
-            --c-info: #00E5FF;  /* Cyan */
-            --c-warn: #FFD600;  /* Yellow */
-            --c-crit: #FF0055;  /* Magenta/Red */
+            --c-safe: #CCFF00;
+            /* Lime */
+            --c-info: #00E5FF;
+            /* Cyan */
+            --c-warn: #FFD600;
+            /* Yellow */
+            --c-crit: #FF0055;
+            /* Magenta/Red */
         }
 
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg-core); font-family: 'JetBrains Mono'; color: var(--text-main); overflow-y: auto; overflow-x: hidden; }
-        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-core);
+            font-family: 'JetBrains Mono';
+            color: var(--text-main);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
 
         /* BACKGROUNDS */
-        #star-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
-        .bg-grid { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 40px 40px; }
+        #star-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .bg-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
 
         /* LAYOUT */
-        #app { position: relative; z-index: 10; padding: 20px 40px; max-width: 1800px; margin: 0 auto; }
+        #app {
+            position: relative;
+            z-index: 10;
+            padding: 20px 40px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
 
         /* HEADER */
-        header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--border-panel); margin-bottom: 30px; position: sticky; top: 0; background: rgba(5,5,5,0.95); z-index: 100; backdrop-filter: blur(10px); }
-        .brand { font-family: 'Montserrat'; font-weight: 900; font-size: 1.5rem; color: white; text-decoration: none; letter-spacing: -1px; }
-        .brand span { color: var(--c-safe); }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border-panel);
+            margin-bottom: 30px;
+            position: sticky;
+            top: 0;
+            background: rgba(5, 5, 5, 0.95);
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
 
-        .controls button { background: transparent; border: 1px solid #333; color: #666; padding: 8px 16px; margin-left: 5px; font-family: 'JetBrains Mono'; font-weight: 700; cursor: pointer; transition: 0.3s; text-transform: uppercase; }
-        .controls button.active { border-color: var(--c-safe); color: var(--c-safe); background: rgba(204,255,0,0.1); }
+        .brand {
+            font-family: 'Montserrat';
+            font-weight: 900;
+            font-size: 1.5rem;
+            color: white;
+            text-decoration: none;
+            letter-spacing: -1px;
+        }
+
+        .brand span {
+            color: var(--c-safe);
+        }
+
+        .controls button {
+            background: transparent;
+            border: 1px solid #333;
+            color: #666;
+            padding: 8px 16px;
+            margin-left: 5px;
+            font-family: 'JetBrains Mono';
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.3s;
+            text-transform: uppercase;
+        }
+
+        .controls button.active {
+            border-color: var(--c-safe);
+            color: var(--c-safe);
+            background: rgba(204, 255, 0, 0.1);
+        }
 
         /* PANELS */
-        .panel { background: var(--bg-panel); border: 1px solid var(--border-panel); border-radius: 4px; padding: 20px; display: flex; flex-direction: column; position: relative; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
-        .panel h3 { font-family: 'Montserrat'; font-weight: 800; font-size: 0.8rem; color: var(--text-dim); margin: 0 0 15px 0; letter-spacing: 1px; display: flex; justify-content: space-between; text-transform: uppercase; }
+        .panel {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-panel);
+            border-radius: 4px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .panel h3 {
+            font-family: 'Montserrat';
+            font-weight: 800;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin: 0 0 15px 0;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+            text-transform: uppercase;
+        }
 
         /* KPIS */
-        .row-kpi { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; height: 140px; margin-bottom: 20px; }
-        .kpi-val { font-family: 'Montserrat'; font-weight: 900; font-size: 2.5rem; line-height: 1; margin-top: auto; }
-        .kpi-sub { font-size: 0.65rem; color: var(--text-dim); font-weight: 700; margin-top: 8px; letter-spacing: 1px; }
+        .row-kpi {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            height: 140px;
+            margin-bottom: 20px;
+        }
+
+        .kpi-val {
+            font-family: 'Montserrat';
+            font-weight: 900;
+            font-size: 2.5rem;
+            line-height: 1;
+            margin-top: auto;
+        }
+
+        .kpi-sub {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            font-weight: 700;
+            margin-top: 8px;
+            letter-spacing: 1px;
+        }
 
         /* MAIN ROW */
-        .row-main { display: grid; grid-template-columns: 3fr 1fr; gap: 20px; height: 500px; margin-bottom: 20px; }
-        
+        .row-main {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 20px;
+            height: 500px;
+            margin-bottom: 20px;
+        }
+
         /* HUD BOXES */
-        .hud-container { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; position: relative; z-index: 20; }
-        .hud-box { background: rgba(0,0,0,0.6); border: 1px solid #333; padding: 10px 15px; font-size: 0.7rem; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; }
-        .hud-raw { color: #888; border-left: 3px solid var(--c-info); }
-        .hud-pred { color: var(--c-safe); border-left: 3px solid var(--c-safe); font-weight: 700; }
-        .hud-label { color: #555; margin-right: 10px; font-weight: 700; }
+        .hud-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 20;
+        }
+
+        .hud-box {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #333;
+            padding: 10px 15px;
+            font-size: 0.7rem;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .hud-raw {
+            color: #888;
+            border-left: 3px solid var(--c-info);
+        }
+
+        .hud-pred {
+            color: var(--c-safe);
+            border-left: 3px solid var(--c-safe);
+            font-weight: 700;
+        }
+
+        .hud-label {
+            color: #555;
+            margin-right: 10px;
+            font-weight: 700;
+        }
 
         /* ASSET PIES */
-        .row-pies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; height: 450px; margin-bottom: 20px; }
+        .row-pies {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            height: 450px;
+            margin-bottom: 20px;
+        }
 
         /* DEEP DIVE */
-        .row-deep { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; height: 450px; margin-bottom: 20px; }
+        .row-deep {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            height: 450px;
+            margin-bottom: 20px;
+        }
 
         /* TABLE */
-        .row-table { display: grid; grid-template-columns: 1fr; min-height: 400px; margin-bottom: 50px; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
-        th { text-align: left; padding: 15px; color: var(--c-safe); border-bottom: 1px solid #333; background: rgba(255,255,255,0.05); position: sticky; top: 0; }
-        td { padding: 12px; border-bottom: 1px solid #222; }
-        .badge { padding: 3px 8px; border-radius: 2px; font-weight: 700; font-size: 0.65rem; border:1px solid; }
-        .b-High { color: var(--c-crit); border-color:var(--c-crit); background: rgba(255,0,85,0.1); }
-        .b-Medium { color: var(--c-warn); border-color:var(--c-warn); background: rgba(255,214,0,0.1); }
-        .b-Low { color: var(--c-info); border-color:var(--c-info); background: rgba(0,229,255,0.1); }
-        .b-Safe { color: var(--c-safe); border-color:var(--c-safe); background: rgba(204,255,0,0.1); }
+        .row-table {
+            display: grid;
+            grid-template-columns: 1fr;
+            min-height: 400px;
+            margin-bottom: 50px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
+        }
+
+        th {
+            text-align: left;
+            padding: 15px;
+            color: var(--c-safe);
+            border-bottom: 1px solid #333;
+            background: rgba(255, 255, 255, 0.05);
+            position: sticky;
+            top: 0;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #222;
+        }
+
+        .badge {
+            padding: 3px 8px;
+            border-radius: 2px;
+            font-weight: 700;
+            font-size: 0.65rem;
+            border: 1px solid;
+        }
+
+        .b-High {
+            color: var(--c-crit);
+            border-color: var(--c-crit);
+            background: rgba(255, 0, 85, 0.1);
+        }
+
+        .b-Medium {
+            color: var(--c-warn);
+            border-color: var(--c-warn);
+            background: rgba(255, 214, 0, 0.1);
+        }
+
+        .b-Low {
+            color: var(--c-info);
+            border-color: var(--c-info);
+            background: rgba(0, 229, 255, 0.1);
+        }
+
+        .b-Safe {
+            color: var(--c-safe);
+            border-color: var(--c-safe);
+            background: rgba(204, 255, 0, 0.1);
+        }
 
         /* --- MODAL STYLES --- */
         .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px);
-            z-index: 2000; display: none; align-items: center; justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
         }
+
         .modal-content {
-            background: #0a0a0a; border: 1px solid var(--c-safe);
-            width: 600px; max-width: 90%; padding: 30px;
+            background: #0a0a0a;
+            border: 1px solid var(--c-safe);
+            width: 600px;
+            max-width: 90%;
+            padding: 30px;
             box-shadow: 0 0 50px rgba(204, 255, 0, 0.1);
-            position: relative; border-radius: 4px;
+            position: relative;
+            border-radius: 4px;
         }
+
         .modal-close {
-            position: absolute; top: 15px; right: 20px; cursor: pointer;
-            color: #666; font-size: 1.5rem;
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            cursor: pointer;
+            color: #666;
+            font-size: 1.5rem;
         }
-        .modal-close:hover { color: white; }
-        .detail-row { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 10px; font-size: 0.8rem; }
-        .detail-label { color: #666; font-weight: 700; }
-        .detail-val { color: var(--text-main); font-family: 'JetBrains Mono'; }
+
+        .modal-close:hover {
+            color: white;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #222;
+            padding-bottom: 10px;
+            font-size: 0.8rem;
+        }
+
+        .detail-label {
+            color: #666;
+            font-weight: 700;
+        }
+
+        .detail-val {
+            color: var(--text-main);
+            font-family: 'JetBrains Mono';
+        }
+
         pre {
-            background: #000; padding: 15px; border: 1px solid #333;
-            color: var(--c-safe); overflow-x: auto; margin-top: 20px;
-            font-size: 0.75rem; border-radius: 4px;
+            background: #000;
+            padding: 15px;
+            border: 1px solid #333;
+            color: var(--c-safe);
+            overflow-x: auto;
+            margin-top: 20px;
+            font-size: 0.75rem;
+            border-radius: 4px;
         }
     </style>
 </head>
+
 <body>
 
-<canvas id="star-canvas"></canvas>
-<div class="bg-grid"></div>
+    <canvas id="star-canvas"></canvas>
+    <div class="bg-grid"></div>
 
-<div id="app">
-    <header>
-        <a href="/" class="brand">&lt; R.A.D.A.R <span>//</span> INTEL</a>
-        <div class="controls">
-            <button class="active" onclick="setMode('buffer')">LIVE STREAM</button>
-            <button onclick="setMode('today')">24 HOURS</button>
-            <button onclick="setMode('week')">7 DAYS</button>
-            <button onclick="window.location.href='/forensics'" style="border-color: #FF0055; color: #FF0055; margin-left: 20px;">
-        [ OPEN FORENSICS ]
-    </button>
-            <label style="margin-left:15px; font-size:0.7rem; cursor:pointer; color:#888;">
-                <input type="checkbox" id="sampleToggle" checked> LIMIT DATA (200)
-            </label>
+    <div id="app">
+        <header>
+            <a href="/templates/index.html" class="brand">&lt; R.A.D.A.R <span>//</span> INTEL</a>
+            <div class="controls">
+                <button class="active" onclick="setMode('buffer')">LIVE STREAM</button>
+                <button onclick="setMode('today')">24 HOURS</button>
+                <button onclick="setMode('week')">7 DAYS</button>
+                <button onclick="window.location.href='/templates/forensics.html'"
+                    style="border-color: #FF0055; color: #FF0055; margin-left: 20px;">
+                    [ OPEN FORENSICS ]
+                </button>
+                <label style="margin-left:15px; font-size:0.7rem; cursor:pointer; color:#888;">
+                    <input type="checkbox" id="sampleToggle" checked> LIMIT DATA (200)
+                </label>
+            </div>
+        </header>
+
+        <div class="row-kpi">
+            <div class="panel">
+                <h3>LIFETIME EVENTS</h3>
+                <div class="kpi-val" id="val-db-total" style="color: #FFF;">0</div>
+                <div class="kpi-sub">TOTAL DB RECORDS</div>
+            </div>
+            <div class="panel">
+                <h3>EVENTS IN VIEW</h3>
+                <div class="kpi-val" id="val-view-total" style="color: var(--c-info)">0</div>
+                <div class="kpi-sub">CURRENT SELECTION</div>
+            </div>
+            <div class="panel">
+                <h3>MAX RISK SCORE</h3>
+                <div class="kpi-val" id="val-score" style="color: var(--c-crit)">0.00</div>
+                <div class="kpi-sub">PEAK MSE</div>
+            </div>
+            <div class="panel">
+                <h3>ANOMALIES</h3>
+                <div class="kpi-val" id="val-anom" style="color: var(--c-warn)">0</div>
+                <div class="kpi-sub">IN CURRENT VIEW</div>
+            </div>
+            <div class="panel">
+                <h3>INTEGRITY</h3>
+                <div class="kpi-val" id="val-health" style="color: var(--c-safe)">100%</div>
+                <div class="kpi-sub">HEALTH SCORE</div>
+            </div>
         </div>
-    </header>
 
-    <div class="row-kpi">
-        <div class="panel"><h3>LIFETIME EVENTS</h3><div class="kpi-val" id="val-db-total" style="color: #FFF;">0</div><div class="kpi-sub">TOTAL DB RECORDS</div></div>
-        <div class="panel"><h3>EVENTS IN VIEW</h3><div class="kpi-val" id="val-view-total" style="color: var(--c-info)">0</div><div class="kpi-sub">CURRENT SELECTION</div></div>
-        <div class="panel"><h3>MAX RISK SCORE</h3><div class="kpi-val" id="val-score" style="color: var(--c-crit)">0.00</div><div class="kpi-sub">PEAK MSE</div></div>
-        <div class="panel"><h3>ANOMALIES</h3><div class="kpi-val" id="val-anom" style="color: var(--c-warn)">0</div><div class="kpi-sub">IN CURRENT VIEW</div></div>
-        <div class="panel"><h3>INTEGRITY</h3><div class="kpi-val" id="val-health" style="color: var(--c-safe)">100%</div><div class="kpi-sub">HEALTH SCORE</div></div>
-    </div>
+        <div class="row-main">
+            <div class="panel">
+                <h3>LIVE SIGNAL INTELLIGENCE</h3>
+                <div class="hud-container">
+                    <div class="hud-box hud-raw" id="hud-raw"><span><span class="hud-label">RAW_STREAM:</span>
+                            ...</span></div>
+                    <div class="hud-box hud-pred" id="hud-pred">
+                        <span><span class="hud-label">ID:</span> --</span>
+                        <span><span class="hud-label">ASSET:</span> --</span>
+                        <span><span class="hud-label">MSE:</span> 0.0000</span>
+                    </div>
+                </div>
+                <div style="flex:1; position:relative; min-height:0;"><canvas id="mainChart"></canvas></div>
+            </div>
+            <div class="panel">
+                <h3>THREAT SEVERITY</h3>
+                <div style="flex:1;"><canvas id="pieMain"></canvas></div>
+            </div>
+        </div>
 
-    <div class="row-main">
-        <div class="panel">
-            <h3>LIVE SIGNAL INTELLIGENCE</h3>
-            <div class="hud-container">
-                <div class="hud-box hud-raw" id="hud-raw"><span><span class="hud-label">RAW_STREAM:</span> ...</span></div>
-                <div class="hud-box hud-pred" id="hud-pred">
-                    <span><span class="hud-label">ID:</span> --</span>
-                    <span><span class="hud-label">ASSET:</span> --</span>
-                    <span><span class="hud-label">MSE:</span> 0.0000</span>
+        <div class="row-pies">
+            <div class="panel">
+                <h3>HIGH SEVERITY ASSETS</h3>
+                <div style="flex:1;"><canvas id="pieHigh"></canvas></div>
+            </div>
+            <div class="panel">
+                <h3>MEDIUM SEVERITY ASSETS</h3>
+                <div style="flex:1;"><canvas id="pieMed"></canvas></div>
+            </div>
+            <div class="panel">
+                <h3>LOW SEVERITY ASSETS</h3>
+                <div style="flex:1;"><canvas id="pieLow"></canvas></div>
+            </div>
+        </div>
+
+        <div class="row-deep">
+            <div class="panel">
+                <h3>MULTIDIMENSIONAL CLUSTER</h3>
+                <div id="scatter3d" style="width:100%; height:100%;"></div>
+            </div>
+            <div class="panel">
+                <h3>ATTACK SURFACE [ RADAR ]</h3>
+                <div style="flex:1; position: relative; padding: 10px;"><canvas id="radarChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="row-table">
+            <div class="panel">
+                <h3>RAW TELEMETRY <span>[ LATEST 15 ]</span></h3>
+                <div style="overflow:auto;">
+                    <table id="rawTable">
+                        <thead>
+                            <tr>
+                                <th>TIME</th>
+                                <th>ID</th>
+                                <th>ASSET</th>
+                                <th>PROTO</th>
+                                <th>SVC</th>
+                                <th>SCORE</th>
+                                <th>STATUS</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
-            <div style="flex:1; position:relative; min-height:0;"><canvas id="mainChart"></canvas></div>
-        </div>
-        <div class="panel">
-            <h3>THREAT SEVERITY</h3>
-            <div style="flex:1;"><canvas id="pieMain"></canvas></div>
         </div>
     </div>
 
-    <div class="row-pies">
-        <div class="panel"><h3>HIGH SEVERITY ASSETS</h3><div style="flex:1;"><canvas id="pieHigh"></canvas></div></div>
-        <div class="panel"><h3>MEDIUM SEVERITY ASSETS</h3><div style="flex:1;"><canvas id="pieMed"></canvas></div></div>
-        <div class="panel"><h3>LOW SEVERITY ASSETS</h3><div style="flex:1;"><canvas id="pieLow"></canvas></div></div>
-    </div>
-
-    <div class="row-deep">
-        <div class="panel"><h3>MULTIDIMENSIONAL CLUSTER</h3><div id="scatter3d" style="width:100%; height:100%;"></div></div>
-        <div class="panel">
-            <h3>ATTACK SURFACE [ RADAR ]</h3>
-            <div style="flex:1; position: relative; padding: 10px;"><canvas id="radarChart"></canvas></div>
+    <div id="detailModal" class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal({target:this})">×</span>
+            <h2 style="font-family:'Montserrat'; color:white; margin-top:0; margin-bottom:20px;">EVENT FORENSICS</h2>
+            <div id="modalBody"></div>
         </div>
     </div>
 
-    <div class="row-table">
-        <div class="panel">
-            <h3>RAW TELEMETRY <span>[ LATEST 15 ]</span></h3>
-            <div style="overflow:auto;"><table id="rawTable"><thead><tr><th>TIME</th><th>ID</th><th>ASSET</th><th>PROTO</th><th>SVC</th><th>SCORE</th><th>STATUS</th></tr></thead><tbody></tbody></table></div>
-        </div>
-    </div>
-</div>
+    <script>
+        // --- FX ---
+        const cvs = document.getElementById('star-canvas'), cx = cvs.getContext('2d'); let w, h, s = []; const rz = () => { w = cvs.width = window.innerWidth; h = cvs.height = window.innerHeight }; window.addEventListener('resize', rz); rz();
+        for (let i = 0; i < 150; i++)s.push({ x: Math.random() * w, y: Math.random() * h, v: Math.random() * 0.05, sz: Math.random() * 1.5 });
+        function ani() { cx.clearRect(0, 0, w, h); s.forEach(x => { x.y -= x.v; if (x.y < 0) x.y = h; cx.fillStyle = '#FFF'; cx.beginPath(); cx.arc(x.x, x.y, x.sz, 0, Math.PI * 2); cx.fill() }); requestAnimationFrame(ani); } ani();
 
-<div id="detailModal" class="modal-overlay" onclick="closeModal(event)">
-    <div class="modal-content">
-        <span class="modal-close" onclick="closeModal({target:this})">×</span>
-        <h2 style="font-family:'Montserrat'; color:white; margin-top:0; margin-bottom:20px;">EVENT FORENSICS</h2>
-        <div id="modalBody"></div>
-    </div>
-</div>
+        // --- CHARTS ---
+        let charts = {}; const cSafe = '#CCFF00', cInfo = '#00E5FF', cWarn = '#FFD600', cCrit = '#FF0055', cGrid = '#222', cTxt = '#888';
+        const conf = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: cGrid }, ticks: { color: cTxt } }, y: { grid: { color: cGrid }, ticks: { color: cTxt } } } };
 
-<script>
-    // --- FX ---
-    const cvs=document.getElementById('star-canvas'), cx=cvs.getContext('2d'); let w,h,s=[]; const rz=()=>{w=cvs.width=window.innerWidth;h=cvs.height=window.innerHeight}; window.addEventListener('resize',rz); rz();
-    for(let i=0;i<150;i++)s.push({x:Math.random()*w,y:Math.random()*h,v:Math.random()*0.05,sz:Math.random()*1.5});
-    function ani(){ cx.clearRect(0,0,w,h); s.forEach(x=>{x.y-=x.v;if(x.y<0)x.y=h;cx.fillStyle='#FFF';cx.beginPath();cx.arc(x.x,x.y,x.sz,0,Math.PI*2);cx.fill()}); requestAnimationFrame(ani); } ani();
+        // DATA STATE
+        let currentChartData = []; // Holds the data currently on screen for clicking
 
-    // --- CHARTS ---
-    let charts={}; const cSafe='#CCFF00', cInfo='#00E5FF', cWarn='#FFD600', cCrit='#FF0055', cGrid='#222', cTxt='#888';
-    const conf={responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:cGrid},ticks:{color:cTxt}}, y:{grid:{color:cGrid},ticks:{color:cTxt}}}};
-    
-    // DATA STATE
-    let currentChartData = []; // Holds the data currently on screen for clicking
-
-    function init() {
-        // Main Line (Clickable)
-        const ctx=document.getElementById('mainChart').getContext('2d');
-        const grad=ctx.createLinearGradient(0,0,0,400); grad.addColorStop(0,'rgba(204,255,0,0.2)'); grad.addColorStop(1,'rgba(0,0,0,0)');
-        charts.main=new Chart(ctx, {
-            type:'line', 
-            data:{labels:[], datasets:[{data:[], borderColor:cSafe, backgroundColor:grad, fill:true, tension:0.3, borderWidth:2, pointRadius:3, hoverRadius:6}]}, 
-            options:{
-                ...conf,
-                onClick: (e, elements) => {
-                    if(elements.length > 0) {
-                        const index = elements[0].index;
-                        const record = currentChartData[index];
-                        if(record) openModal(record);
+        function init() {
+            // Main Line (Clickable)
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            const grad = ctx.createLinearGradient(0, 0, 0, 400); grad.addColorStop(0, 'rgba(204,255,0,0.2)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+            charts.main = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderColor: cSafe, backgroundColor: grad, fill: true, tension: 0.3, borderWidth: 2, pointRadius: 3, hoverRadius: 6 }] },
+                options: {
+                    ...conf,
+                    onClick: (e, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const record = currentChartData[index];
+                            if (record) openModal(record);
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        charts.pie=new Chart(document.getElementById('pieMain'), {type:'doughnut', data:{labels:['High','Med','Low','Safe'], datasets:[{data:[0,0,0,0], backgroundColor:[cCrit,cWarn,cInfo,cSafe], borderWidth:0}]}, options:{...conf, cutout:'70%'}});
+            charts.pie = new Chart(document.getElementById('pieMain'), { type: 'doughnut', data: { labels: ['High', 'Med', 'Low', 'Safe'], datasets: [{ data: [0, 0, 0, 0], backgroundColor: [cCrit, cWarn, cInfo, cSafe], borderWidth: 0 }] }, options: { ...conf, cutout: '70%' } });
 
-        const legOpts = { responsive:true, maintainAspectRatio:false, layout:{padding:10}, plugins: { legend: { display:true, position:'right', labels:{color:'#888', boxWidth:10, font:{size:9, family:'JetBrains Mono'}} } } };
-        ['High','Med','Low'].forEach(k=>{
-            charts['pie'+k]=new Chart(document.getElementById('pie'+k), {type:'pie', data:{labels:[], datasets:[{data:[], backgroundColor:[cCrit,cWarn,cInfo,cSafe,'#FFF'], borderWidth:0}]}, options:legOpts});
-        });
+            const legOpts = { responsive: true, maintainAspectRatio: false, layout: { padding: 10 }, plugins: { legend: { display: true, position: 'right', labels: { color: '#888', boxWidth: 10, font: { size: 9, family: 'JetBrains Mono' } } } } };
+            ['High', 'Med', 'Low'].forEach(k => {
+                charts['pie' + k] = new Chart(document.getElementById('pie' + k), { type: 'pie', data: { labels: [], datasets: [{ data: [], backgroundColor: [cCrit, cWarn, cInfo, cSafe, '#FFF'], borderWidth: 0 }] }, options: legOpts });
+            });
 
-        // Radar Chart
-        charts.radar = new Chart(document.getElementById('radarChart').getContext('2d'), {
-            type: 'radar',
-            data: { labels:['HTTP','SMTP','SSH','DNS','FTP'], datasets:[{label:'Targeted', data:[0,0,0,0,0], backgroundColor:'rgba(0,229,255,0.2)', borderColor:cInfo, borderWidth:2, pointBackgroundColor:cInfo}] },
-            options: {
-                responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-                scales: { r: { angleLines: { color: '#333' }, grid: { color: '#333' }, pointLabels: { color: cTxt, font: { size: 11, family: 'JetBrains Mono' } }, ticks: { backdropColor: 'transparent', color: cInfo, display: true, font: { size: 9 } }, suggestedMin: 0 } }
-            }
-        });
-    }
+            // Radar Chart
+            charts.radar = new Chart(document.getElementById('radarChart').getContext('2d'), {
+                type: 'radar',
+                data: { labels: ['HTTP', 'SMTP', 'SSH', 'DNS', 'FTP'], datasets: [{ label: 'Targeted', data: [0, 0, 0, 0, 0], backgroundColor: 'rgba(0,229,255,0.2)', borderColor: cInfo, borderWidth: 2, pointBackgroundColor: cInfo }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                    scales: { r: { angleLines: { color: '#333' }, grid: { color: '#333' }, pointLabels: { color: cTxt, font: { size: 11, family: 'JetBrains Mono' } }, ticks: { backdropColor: 'transparent', color: cInfo, display: true, font: { size: 9 } }, suggestedMin: 0 } }
+                }
+            });
+        }
 
-    // --- MODAL LOGIC ---
-    function openModal(rec) {
-        const modal = document.getElementById('detailModal');
-        const body = document.getElementById('modalBody');
-        
-        let rawPretty = rec.raw_data;
-        try { rawPretty = JSON.stringify(JSON.parse(rec.raw_data), null, 2); } catch(e){}
+        // --- MODAL LOGIC ---
+        function openModal(rec) {
+            const modal = document.getElementById('detailModal');
+            const body = document.getElementById('modalBody');
 
-        const col = rec.severity==='High'?cCrit:(rec.severity==='Medium'?cWarn:(rec.severity==='Safe'?cSafe:cInfo));
+            let rawPretty = rec.raw_data;
+            try { rawPretty = JSON.stringify(JSON.parse(rec.raw_data), null, 2); } catch (e) { }
 
-        body.innerHTML = `
+            const col = rec.severity === 'High' ? cCrit : (rec.severity === 'Medium' ? cWarn : (rec.severity === 'Safe' ? cSafe : cInfo));
+
+            body.innerHTML = `
             <div class="detail-row"><span class="detail-label">EVENT ID</span> <span class="detail-val">${rec.id}</span></div>
             <div class="detail-row"><span class="detail-label">TIMESTAMP</span> <span class="detail-val">${rec.timestamp}</span></div>
             <div class="detail-row"><span class="detail-label">ASSET ID</span> <span class="detail-val" style="color:${cInfo}">${rec.asset_id}</span></div>
@@ -255,103 +577,104 @@
             <div class="detail-row"><span class="detail-label">PREDICTION</span> <span class="detail-val">${rec.prediction}</span></div>
             <pre>${rawPretty}</pre>
         `;
-        modal.style.display = 'flex';
-    }
-
-    window.closeModal = function(e) {
-        if (e.target.id === 'detailModal' || e.target.className === 'modal-close') {
-            document.getElementById('detailModal').style.display = 'none';
-        }
-    }
-
-    // --- MAIN LOGIC ---
-    let mode='buffer';
-    
-    setInterval(async ()=>{
-        const [resStats, resLat] = await Promise.all([fetch('/api/stats'), fetch('/api/latest')]);
-        const stats = await resStats.json();
-        const lat = await resLat.json();
-
-        document.getElementById('val-db-total').innerText = stats.db_total;
-
-        if(lat.id) {
-            document.getElementById('hud-raw').innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><b class="hud-label">STREAM:</b> ${lat.raw_data}</span>`;
-            const col = lat.severity==='High'?cCrit:(lat.severity==='Medium'?cWarn:(lat.severity==='Safe'?cSafe:cInfo));
-            document.getElementById('hud-pred').innerHTML = `<span><b class="hud-label">ID:</b> ${lat.id}</span><span><b class="hud-label">ASSET:</b> ${lat.asset_id}</span><span><b class="hud-label">MSE:</b> ${lat.anomaly_score.toFixed(5)}</span><span style="color:${col}">${lat.severity}</span>`;
-            document.getElementById('hud-pred').style.borderLeftColor = col;
-        }
-    }, 1000);
-
-    async function fetchData() {
-        const smp = document.getElementById('sampleToggle').checked ? 200 : 0;
-        let url = mode==='buffer' ? '/api/anomalies' : `/api/anomalies/history?range=${mode}&sample=${smp}`;
-        try {
-            const res = await fetch(url);
-            const json = await res.json();
-            updateUI(json.anomalies||[], json.view_stats||null);
-        } catch(e){ console.error(e); }
-    }
-
-    function updateUI(data, vStats) {
-        // Save for Click Handler
-        currentChartData = data;
-
-        if(!data.length && mode!=='buffer') return;
-
-        let total = data.length;
-        let anoms = data.filter(d=>d.is_anomaly).length;
-        let maxS = Math.max(...data.map(d=>d.anomaly_score||0));
-
-        if(mode!=='buffer' && vStats) {
-            total = vStats.total; anoms = vStats.anomalies; maxS = vStats.max_score;
+            modal.style.display = 'flex';
         }
 
-        document.getElementById('val-view-total').innerText = total;
-        document.getElementById('val-anom').innerText = anoms;
-        document.getElementById('val-score').innerText = maxS.toFixed(4);
-        const health = total>0 ? (100 - (anoms/total)*100) : 100;
-        document.getElementById('val-health').innerText = Math.max(0, health).toFixed(1)+'%';
-        document.getElementById('val-health').style.color = health>90?cSafe:(health>60?cWarn:cCrit);
-
-        charts.main.data.labels = data.map(d=>d.timestamp.split('T')[1]);
-        charts.main.data.datasets[0].data = data.map(d=>d.value);
-        charts.main.update();
-
-        const h=data.filter(d=>d.severity==='High'), m=data.filter(d=>d.severity==='Medium'), l=data.filter(d=>d.severity==='Low'), s=data.filter(d=>d.severity==='Safe');
-        charts.pie.data.datasets[0].data = [h.length, m.length, l.length, s.length];
-        charts.pie.update();
-
-        updAP(charts.pieHigh, h); updAP(charts.pieMed, m); updAP(charts.pieLow, l);
-
-        // RADAR
-        const svcs={}; 
-        data.forEach(d=>{ try{ const j=JSON.parse(d.raw_data); const k=j.service||j.proto||'unk'; svcs[k]=(svcs[k]||0)+1; }catch(e){} });
-        const sSvcs = Object.entries(svcs).sort((a,b)=>b[1]-a[1]).slice(0,5);
-        if(sSvcs.length > 0) {
-            charts.radar.data.labels = sSvcs.map(x=>x[0].toUpperCase());
-            charts.radar.data.datasets[0].data = sSvcs.map(x=>x[1]);
-            charts.radar.update();
+        window.closeModal = function (e) {
+            if (e.target.id === 'detailModal' || e.target.className === 'modal-close') {
+                document.getElementById('detailModal').style.display = 'none';
+            }
         }
 
-        const trace={x:data.map(d=>d.anomaly_score), y:data.map(d=>d.value), z:data.map(d=>new Date(d.timestamp).getTime()), mode:'markers', marker:{size:3, color:data.map(d=>d.anomaly_score), colorscale:'Viridis'}, type:'scatter3d'};
-        Plotly.react('scatter3d', [trace], {margin:{l:0,r:0,b:0,t:0}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', scene:{xaxis:{title:'S',color:'#666'}, yaxis:{title:'V',color:'#666'}, zaxis:{title:'T',color:'#666'}}}, {displayModeBar:false});
+        // --- MAIN LOGIC ---
+        let mode = 'buffer';
 
-        const tb=document.querySelector('#rawTable tbody'); tb.innerHTML='';
-        data.slice(-15).reverse().forEach(r=>{
-            let p='-', s='-'; try{const j=JSON.parse(r.raw_data); p=j.proto; s=j.service;}catch(e){}
-            tb.innerHTML+=`<tr><td style="color:#666">${r.timestamp.split('T')[1]}</td><td>${r.id}</td><td style="color:${cInfo}">${r.asset_id}</td><td>${p}</td><td>${s}</td><td>${r.anomaly_score.toFixed(4)}</td><td><span class="badge b-${r.severity}">${r.severity}</span></td></tr>`;
-        });
-    }
+        setInterval(async () => {
+            const [resStats, resLat] = await Promise.all([fetch('/api/stats'), fetch('/api/latest')]);
+            const stats = await resStats.json();
+            const lat = await resLat.json();
 
-    function updAP(c,d){
-        const cnt={}; d.forEach(x=>cnt[x.asset_id]=(cnt[x.asset_id]||0)+1);
-        const s=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,5);
-        c.data.labels=s.map(x=>x[0]); c.data.datasets[0].data=s.map(x=>x[1]); c.update();
-    }
+            document.getElementById('val-db-total').innerText = stats.db_total;
 
-    window.setMode=m=>{ mode=m; document.querySelectorAll('.controls button').forEach(b=>b.classList.remove('active')); event.target.classList.add('active'); fetchData(); };
-    init(); fetchData(); setInterval(()=>{ if(mode==='buffer') fetchData(); }, 2000);
+            if (lat.id) {
+                document.getElementById('hud-raw').innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><b class="hud-label">STREAM:</b> ${lat.raw_data}</span>`;
+                const col = lat.severity === 'High' ? cCrit : (lat.severity === 'Medium' ? cWarn : (lat.severity === 'Safe' ? cSafe : cInfo));
+                document.getElementById('hud-pred').innerHTML = `<span><b class="hud-label">ID:</b> ${lat.id}</span><span><b class="hud-label">ASSET:</b> ${lat.asset_id}</span><span><b class="hud-label">MSE:</b> ${lat.anomaly_score.toFixed(5)}</span><span style="color:${col}">${lat.severity}</span>`;
+                document.getElementById('hud-pred').style.borderLeftColor = col;
+            }
+        }, 1000);
 
-</script>
+        async function fetchData() {
+            const smp = document.getElementById('sampleToggle').checked ? 200 : 0;
+            let url = mode === 'buffer' ? '/api/anomalies' : `/api/anomalies/history?range=${mode}&sample=${smp}`;
+            try {
+                const res = await fetch(url);
+                const json = await res.json();
+                updateUI(json.anomalies || [], json.view_stats || null);
+            } catch (e) { console.error(e); }
+        }
+
+        function updateUI(data, vStats) {
+            // Save for Click Handler
+            currentChartData = data;
+
+            if (!data.length && mode !== 'buffer') return;
+
+            let total = data.length;
+            let anoms = data.filter(d => d.is_anomaly).length;
+            let maxS = Math.max(...data.map(d => d.anomaly_score || 0));
+
+            if (mode !== 'buffer' && vStats) {
+                total = vStats.total; anoms = vStats.anomalies; maxS = vStats.max_score;
+            }
+
+            document.getElementById('val-view-total').innerText = total;
+            document.getElementById('val-anom').innerText = anoms;
+            document.getElementById('val-score').innerText = maxS.toFixed(4);
+            const health = total > 0 ? (100 - (anoms / total) * 100) : 100;
+            document.getElementById('val-health').innerText = Math.max(0, health).toFixed(1) + '%';
+            document.getElementById('val-health').style.color = health > 90 ? cSafe : (health > 60 ? cWarn : cCrit);
+
+            charts.main.data.labels = data.map(d => d.timestamp.split('T')[1]);
+            charts.main.data.datasets[0].data = data.map(d => d.value);
+            charts.main.update();
+
+            const h = data.filter(d => d.severity === 'High'), m = data.filter(d => d.severity === 'Medium'), l = data.filter(d => d.severity === 'Low'), s = data.filter(d => d.severity === 'Safe');
+            charts.pie.data.datasets[0].data = [h.length, m.length, l.length, s.length];
+            charts.pie.update();
+
+            updAP(charts.pieHigh, h); updAP(charts.pieMed, m); updAP(charts.pieLow, l);
+
+            // RADAR
+            const svcs = {};
+            data.forEach(d => { try { const j = JSON.parse(d.raw_data); const k = j.service || j.proto || 'unk'; svcs[k] = (svcs[k] || 0) + 1; } catch (e) { } });
+            const sSvcs = Object.entries(svcs).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            if (sSvcs.length > 0) {
+                charts.radar.data.labels = sSvcs.map(x => x[0].toUpperCase());
+                charts.radar.data.datasets[0].data = sSvcs.map(x => x[1]);
+                charts.radar.update();
+            }
+
+            const trace = { x: data.map(d => d.anomaly_score), y: data.map(d => d.value), z: data.map(d => new Date(d.timestamp).getTime()), mode: 'markers', marker: { size: 3, color: data.map(d => d.anomaly_score), colorscale: 'Viridis' }, type: 'scatter3d' };
+            Plotly.react('scatter3d', [trace], { margin: { l: 0, r: 0, b: 0, t: 0 }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', scene: { xaxis: { title: 'S', color: '#666' }, yaxis: { title: 'V', color: '#666' }, zaxis: { title: 'T', color: '#666' } } }, { displayModeBar: false });
+
+            const tb = document.querySelector('#rawTable tbody'); tb.innerHTML = '';
+            data.slice(-15).reverse().forEach(r => {
+                let p = '-', s = '-'; try { const j = JSON.parse(r.raw_data); p = j.proto; s = j.service; } catch (e) { }
+                tb.innerHTML += `<tr><td style="color:#666">${r.timestamp.split('T')[1]}</td><td>${r.id}</td><td style="color:${cInfo}">${r.asset_id}</td><td>${p}</td><td>${s}</td><td>${r.anomaly_score.toFixed(4)}</td><td><span class="badge b-${r.severity}">${r.severity}</span></td></tr>`;
+            });
+        }
+
+        function updAP(c, d) {
+            const cnt = {}; d.forEach(x => cnt[x.asset_id] = (cnt[x.asset_id] || 0) + 1);
+            const s = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            c.data.labels = s.map(x => x[0]); c.data.datasets[0].data = s.map(x => x[1]); c.update();
+        }
+
+        window.setMode = m => { mode = m; document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active')); event.target.classList.add('active'); fetchData(); };
+        init(); fetchData(); setInterval(() => { if (mode === 'buffer') fetchData(); }, 2000);
+
+    </script>
 </body>
+
 </html>
